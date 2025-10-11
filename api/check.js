@@ -9,7 +9,6 @@ export default async function handler(req, res) {
       .toLowerCase()
       .replace(/[ _-]/g, '');
 
-    // Answers are stored securely as environment variables in Vercel
     const ANSWERS = [
       (process.env.A_L1 || 'vr204,vrsuite,virtualreality,vr').split(','),
       (process.env.A_L2 || 'firelab02,firelab,flammability').split(','),
