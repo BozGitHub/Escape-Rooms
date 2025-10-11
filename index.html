@@ -49,83 +49,57 @@
   </div>
 
   <script>
-// ===== Vertical Descent Escape — Frontend wired to secure /api/check (ES5-compatible) =====
+// ===== Vertical Descent Escape — Robust ES5 build + secure /api/check =====
 (function(){
   var roomsEl = document.getElementById('rooms');
+  if(!roomsEl){ return; }
 
-  // ---------- Helpers (ES5, no async/await, no arrows) ----------
+  // ---------- Helpers (ES5, no arrows/await) ----------
   function toStr(x){ return String(x==null?'':x); }
   function nl2br(s){ return toStr(s).split('
 ').join('<br>'); }
   function clean(s){ var t=toStr(s).trim().toLowerCase(); t=t.split(' ').join(''); t=t.split('-').join(''); t=t.split('_').join(''); return t; }
+  function showFatal(msg){ try{ var card=document.createElement('div'); card.className='card'; card.style.borderColor='#ef4444'; card.innerHTML='<strong>Error:</strong> '+toStr(msg); roomsEl.parentNode.insertBefore(card, roomsEl); }catch(e){} }
 
-  // Show a fatal error on page (if something stops rendering)
-  function showFatal(msg){
-    try{
-      var card = document.createElement('div');
-      card.className = 'card';
-      card.style.borderColor = '#ef4444';
-      card.innerHTML = '<strong>Setup error:</strong> '+toStr(msg)+'<br><small>Try a modern browser or refresh.</small>';
-      roomsEl.parentNode.insertBefore(card, roomsEl);
-    }catch(e){}
-  }
-
-  // ---------- Secure server-side verification (Promise-based) ----------
+  // ---------- Server verify (Promise-based) ----------
   function verify(levelIndex, answer){
     return new Promise(function(resolve){
       try{
-        var payload = JSON.stringify({ level: levelIndex, answer: answer });
-        fetch('/api/check', {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: payload
-        }).then(function(r){
-          if(!r || !r.ok) return resolve(false);
-          return r.json().then(function(data){ resolve(!!(data && data.ok)); }, function(){ resolve(false); });
-        }, function(){ resolve(false); });
-      } catch(e){ resolve(false); }
+        var payload=JSON.stringify({ level: levelIndex, answer: answer });
+        fetch('/api/check', { method:'POST', headers:{'Content-Type':'application/json'}, body: payload })
+          .then(function(r){ if(!r||!r.ok){ return resolve(false); } return r.json(); })
+          .then(function(data){ resolve(!!(data&&data.ok)); }, function(){ resolve(false); });
+      }catch(e){ resolve(false); }
     });
   }
 
-  // ---------- Levels (content only; correctness checked on server) ----------
+  // ---------- Levels (plain ASCII text) ----------
   var ROOMS = [
     { title:'Level 1 - VR Suite (Top Floor)',
-      prompt:'"Reality bends upstairs - seek the world that is not real, to reveal what is true."
-
-Find the VR Suite on the top floor. Enter the room number or keyword you see there (for example, VR204 or VR Suite).',
+      prompt:'Reality bends upstairs. Find the VR Suite on the top floor. Enter the room number or keyword you see there (for example, VR204 or VR Suite).',
       hint:'Try the room code on the door.' },
     { title:'Level 2 - Fire Laboratory',
-      prompt:'Descend one floor. "Where heat meets safety, flames are studied, not feared."
-
-Enter the room number or a label you find in the Fire Lab.',
-      hint:'Look for controlled-combustion equipment.' },
+      prompt:'Descend one floor. Where heat meets safety, flames are studied not feared. Enter the room number or a label you find in the Fire Lab.',
+      hint:'Look for controlled combustion equipment.' },
     { title:'Level 3 - 3D Printing Workshop',
-      prompt:'Descend again. "Where ideas become matter, one layer at a time."
-
-Enter a printer model code or the room label you find (for example, MK3S, Prusa).',
+      prompt:'Descend again. Where ideas become matter one layer at a time. Enter a printer model code or the room label you find (for example, MK3S or Prusa).',
       hint:'Check the machine tag.' },
-    { title:'Level 4 - Motorsport & Composites Lab',
-      prompt:'Go down two floors (skip one). "Engines sleep and carbon weaves dream of speed."
-
-Enter the team name, a room label, or a code you find near the car.',
+    { title:'Level 4 - Motorsport and Composites Lab',
+      prompt:'Go down two floors (skip one). Engines sleep and carbon weaves dream of speed. Enter the team name, a room label, or a code you find near the car.',
       hint:'Look near the steering wheel or composite layup.' },
     { title:'Level 5 - Simulation Lab (Lower Ground)',
-      prompt:'Descend to the lower ground. "What flies safely is rehearsed here first."
-
-Enter the room number or a keyword you find there (for example, Simulation, Sim Lab).',
+      prompt:'Descend to the lower ground. What flies safely is rehearsed here first. Enter the room number or a keyword you find there (for example, Simulation or Sim Lab).',
       hint:'Check the door plaque or console.' },
     { title:'Level 6 - CNC Workshop Finale',
-      prompt:'Final step! "Creation obeys a number."
-
-From previous clues, you have determined the CNC program number (for example, based on a 5-axis hint -> program 5). Enter that number now.',
-      hint:'Think: axis count -> program number.' }
+      prompt:'Final step. Creation obeys a number. From previous clues, determine the CNC program number (for example, 5 for a 5 axis hint). Enter that number now.',
+      hint:'Think: axis count to program number.' }
   ];
 
   // ---------- UI ----------
   function makeRoom(i, room){
     var div=document.createElement('div');
     div.className='card room'+(i===0?' active':'');
-    div.dataset.index=i;
+    div.setAttribute('data-index', String(i));
     div.innerHTML=''+
       '<h2 style="margin:0 0 .5rem 0">'+room.title+'</h2>'+
       '<div class="q">'+nl2br(room.prompt)+'</div>'+
@@ -143,35 +117,37 @@ From previous clues, you have determined the CNC program number (for example, ba
     var fb=div.querySelector('.feedback');
 
     submit.addEventListener('click', function(){
-      var val = input.value;
-      submit.disabled = true; fb.textContent = 'Checking...'; fb.className='feedback';
+      var val=input.value;
+      submit.disabled=true; fb.textContent='Checking...'; fb.className='feedback';
       verify(i, val).then(function(ok){
-        submit.disabled = false;
-        if (ok){ fb.textContent='✓ Correct!'; fb.className='feedback ok'; next.disabled=false; next.focus(); }
-        else { fb.textContent='✗ Not yet - try again!'; fb.className='feedback err'; }
+        submit.disabled=false;
+        if(ok){ fb.textContent='Correct!'; fb.className='feedback ok'; next.disabled=false; next.focus(); }
+        else { fb.textContent='Not yet - try again!'; fb.className='feedback err'; }
       });
     });
 
     next.addEventListener('click', function(){
-      var idx = parseInt(div.dataset.index, 10);
+      var idx=parseInt(div.getAttribute('data-index'),10);
       div.classList.remove('active');
-      if (idx + 1 < ROOMS.length){
-        var nxt=document.querySelector('.room[data-index="'+(idx+1)+'"]');
-        if (!nxt){ showFatal('Could not find next room'); return; }
+      if(idx+1<ROOMS.length){
+        var sel='.room[data-index="'+(idx+1)+'"]';
+        var nxt=document.querySelector(sel);
+        if(!nxt){ showFatal('Could not find next room'); return; }
         nxt.classList.add('active');
-        var f=nxt.querySelector('input'); if (f) f.focus();
-      } else {
-        celebrate();
-      }
+        var f=nxt.querySelector('input'); if(f) f.focus();
+      } else { celebrate(); }
     });
 
     return div;
   }
 
   function build(){
-    try {
-      for (var i=0;i<ROOMS.length;i++){ roomsEl.appendChild(makeRoom(i, ROOMS[i])); }
-    } catch(e){ showFatal(e && e.message ? e.message : 'render error'); }
+    try{
+      for(var i=0;i<ROOMS.length;i++){ roomsEl.appendChild(makeRoom(i, ROOMS[i])); }
+      // sanity check: ensure first room visible
+      var first=document.querySelector('.room[data-index="0"]');
+      if(!first){ showFatal('Rooms failed to render'); }
+    }catch(e){ showFatal(e && e.message ? e.message : 'render error'); }
   }
 
   function celebrate(){
@@ -193,14 +169,14 @@ b'),'a<br>b','nl2br');
     eq(clean('VR 204'),'vr204','clean-space');
     eq(clean('VR-204'),'vr204','clean-dash');
     eq(clean('VR_204'),'vr204','clean-underscore');
-    ok(typeof verify === 'function','verify is function');
-    var firstNext = document.querySelector('.room[data-index="0"] .next');
-    // firstNext will be null before build; ensure build runs
-    if(!firstNext){ console.log('Info: building UI now'); }
+    ok(document.querySelector('.room[data-index="0"]')!=null,'first room exists');
+    var firstNext=document.querySelector('.room[data-index="0"] .next');
+    ok(firstNext!=null,'first next button exists');
+    if(fails===0) console.log('Basic tests passed.'); else console.warn(fails+' test(s) failed.');
   }
 
   build();
-  try { runTests(); } catch(e){ showFatal('tests error: '+e.message); }
+  try{ runTests(); }catch(e){ showFatal('tests error: '+e.message); }
 })();
 </script>
 </body>
