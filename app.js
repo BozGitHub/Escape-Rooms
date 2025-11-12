@@ -1,7 +1,7 @@
 // app.js — Immersive (Silent Edition): intros, progress, countdown, confetti, dramatic finale
 (function () {
   var CONFIG = {
-    COUNTDOWN_MINUTES: 20,
+    COUNTDOWN_MINUTES: 25,
     typingMsPerChar: 14,
   };
 
