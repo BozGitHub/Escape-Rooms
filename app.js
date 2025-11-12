@@ -38,7 +38,7 @@
     // Levels (content only)
     var ROOMS = [
       { title:'Level 1 - VR Suite (Top Floor)',
-        prompt:'Reality bends upstairs. Find the VR Suite on the top floor. Enter the room number or keyword you see there (for example, VR204 or VR Suite).',
+        prompt:'Reality bends upstairs. Find the VR Suite on the top floor. Enter the room number',
         hint:'Try the room code on the door.' },
       { title:'Level 2 - Fire Laboratory',
         prompt:'Descend one floor. Where heat meets safety, flames are studied not feared. Enter the room number or a label you find in the Fire Lab.',
