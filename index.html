@@ -1,183 +1,106 @@
 <!DOCTYPE html>
-<html lang='en'>
+<html lang="en">
 <head>
-  <meta charset='utf-8' />
-  <meta name='viewport' content='width=device-width, initial-scale=1.0' />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Escape the Engineering Building — Vertical Descent</title>
   <style>
-    :root{--bg:#0d1117;--panel:#161b22;--text:#e6edf3;--muted:#9da7b1;--accent:#3b82f6;--ok:#10b981;--error:#ef4444}
-    *{box-sizing:border-box}
-    body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,'Noto Sans';background:linear-gradient(120deg,#0d1117,#0b1220 40%,#0d1117);color:var(--text)}
-    .wrap{max-width:900px;margin:0 auto;padding:2rem 1rem 4rem}
-    header{display:flex;align-items:center;gap:1rem;margin-bottom:1rem}
-    header h1{font-size:clamp(1.6rem,2.8vw,2.4rem);margin:0}
-    .card{background:var(--panel);border:1px solid #222a36;border-radius:16px;padding:1.25rem;box-shadow:0 6px 24px rgba(0,0,0,.25)}
-    .story{color:var(--muted);line-height:1.55}
-    .room{display:none;margin-top:1rem}
-    .room.active{display:block;animation:fade .35s ease-in}
-    @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-    .q{font-size:1.05rem;line-height:1.5;white-space:pre-line}
-    .controls{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;margin-top:1rem}
-    input[type=text]{background:#0b1220;color:var(--text);border:1px solid #243043;border-radius:12px;padding:.85rem 1rem;width:min(520px,100%);outline:none}
-    button{cursor:pointer;background:var(--accent);color:#fff;border:none;border-radius:12px;padding:.8rem 1.1rem;font-weight:600}
-    button[disabled]{opacity:.5;cursor:not-allowed}
-    .hint,.feedback{margin-top:.5rem;font-size:.95rem;color:var(--muted)}
-    .feedback.ok{color:var(--ok)}.feedback.err{color:var(--error)}
-    .level-pill{display:inline-flex;align-items:center;gap:.5rem;background:#0b1322;border:1px solid #223047;border-radius:99px;padding:.4rem .7rem;font-size:.9rem;color:var(--muted)}
-    .grid{display:grid;grid-template-columns:1fr;gap:1rem}.next{background:var(--ok)}
-    footer{margin-top:2rem;color:var(--muted);font-size:.9rem}
-    .confetti{position:fixed;inset:0;pointer-events:none}
+    :root {
+      --bg:#0d1117; --panel:#161b22; --text:#e6edf3; --muted:#9da7b1;
+      --accent:#3b82f6; --ok:#10b981; --error:#ef4444;
+    }
+    * { box-sizing:border-box; }
+    body {
+      margin:0;
+      font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,'Noto Sans';
+      background:linear-gradient(120deg,#0d1117,#0b1220 40%,#0d1117);
+      color:var(--text);
+    }
+    .wrap { max-width:900px; margin:0 auto; padding:2rem 1rem 4rem; }
+    header { display:flex; align-items:center; gap:1rem; margin-bottom:1rem; }
+    header h1 { font-size:clamp(1.6rem,2.8vw,2.4rem); margin:0; }
+    .card {
+      background:var(--panel);
+      border:1px solid #222a36;
+      border-radius:16px;
+      padding:1.25rem;
+      box-shadow:0 6px 24px rgba(0,0,0,.25);
+    }
+    .story { color:var(--muted); line-height:1.55; }
+    .room { display:none; margin-top:1rem; }
+    .room.active { display:block; animation:fade .35s ease-in; }
+    @keyframes fade { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+    .q { font-size:1.05rem; line-height:1.5; white-space:pre-line; }
+    .controls { display:flex; flex-wrap:wrap; gap:.75rem; align-items:center; margin-top:1rem; }
+    input[type=text] {
+      background:#0b1220;
+      color:var(--text);
+      border:1px solid #243043;
+      border-radius:12px;
+      padding:.85rem 1rem;
+      width:min(520px,100%);
+      outline:none;
+    }
+    button {
+      cursor:pointer;
+      background:var(--accent);
+      color:#fff;
+      border:none;
+      border-radius:12px;
+      padding:.8rem 1.1rem;
+      font-weight:600;
+    }
+    button[disabled] { opacity:.5; cursor:not-allowed; }
+    .hint, .feedback { margin-top:.5rem; font-size:.95rem; color:var(--muted); }
+    .feedback.ok { color:var(--ok); }
+    .feedback.err { color:var(--error); }
+    .level-pill {
+      display:inline-flex;
+      align-items:center;
+      gap:.5rem;
+      background:#0b1322;
+      border:1px solid #223047;
+      border-radius:99px;
+      padding:.4rem .7rem;
+      font-size:.9rem;
+      color:var(--muted);
+    }
+    .grid { display:grid; grid-template-columns:1fr; gap:1rem; }
+    .next { background:var(--ok); }
+    footer { margin-top:2rem; color:var(--muted); font-size:.9rem; }
+    .confetti { position:fixed; inset:0; pointer-events:none; }
   </style>
 </head>
 <body>
-  <canvas class='confetti'></canvas>
-  <div class='wrap'>
+  <canvas class="confetti"></canvas>
+  <div class="wrap">
     <header>
       <h1>Escape the Engineering Building — Vertical Descent</h1>
-      <span class='level-pill'><strong>6</strong> Levels</span>
+      <span class="level-pill"><strong>6</strong> Levels</span>
     </header>
 
-    <div class='card story'>
-      A power surge has locked access points across the engineering building. Your only way out: descend floor by floor, solving location-based clues in real labs — from the VR suite on the top floor down to the CNC workshop underground. Each correct entry unlocks the next level.
+    <div class="card story">
+      A power surge has locked access points across the engineering building.
+      Your only way out: descend floor by floor, solving location-based clues
+      in real labs — from the VR suite on the top floor down to the CNC workshop
+      underground. Each correct entry unlocks the next level.
     </div>
 
-    <div id='rooms' class='grid'></div>
+    <div id="rooms" class="grid"></div>
 
     <footer>
-      Answers are usually a <em>room number</em>, a <em>label</em>, or a <em>keyword</em> you’ll find in that space. (Case-insensitive.)
+      Answers are usually a <em>room number</em>, a <em>label</em>, or a <em>keyword</em>
+      you’ll find in that space. (Case-insensitive.)
     </footer>
   </div>
 
-  <script>
-// ===== Vertical Descent Escape — ES5 + DOM ready + visible error fallback =====
-(function(){
-  function start(){
-    var roomsEl = document.getElementById('rooms');
-    if(!roomsEl){ return; }
+  <noscript>
+    <div class="card" style="border-color:#ef4444">
+      This game requires JavaScript to run. Please enable JavaScript and reload.
+    </div>
+  </noscript>
 
-    // ---------- Helpers ----------
-    function toStr(x){ return String(x==null?'':x); }
-    function nl2br(s){ return toStr(s).split('
-').join('<br>'); }
-    function clean(s){ var t=toStr(s).trim().toLowerCase(); t=t.split(' ').join(''); t=t.split('-').join(''); t=t.split('_').join(''); return t; }
-    function showFatal(msg){ try{ var card=document.createElement('div'); card.className='card'; card.style.borderColor='#ef4444'; card.innerHTML='<strong>Error:</strong> '+toStr(msg); roomsEl.parentNode.insertBefore(card, roomsEl); }catch(e){} }
-
-    // Preloader message (replaced by build)
-    roomsEl.innerHTML = "<div class='card'>Loading puzzles…</div>";
-
-    // ---------- Server verify ----------
-    function verify(levelIndex, answer){
-      return new Promise(function(resolve){
-        try{
-          var payload=JSON.stringify({ level: levelIndex, answer: answer });
-          fetch('/api/check', { method:'POST', headers:{'Content-Type':'application/json'}, body: payload })
-            .then(function(r){ if(!r||!r.ok){ return resolve(false); } return r.json(); })
-            .then(function(data){ resolve(!!(data&&data.ok)); }, function(){ resolve(false); });
-        }catch(e){ resolve(false); }
-      });
-    }
-
-    // ---------- Levels ----------
-    var ROOMS = [
-      { title:'Level 1 - VR Suite (Top Floor)',
-        prompt:'Reality bends upstairs. Find the VR Suite on the top floor. Enter the room number9999',
-        hint:'Try the room code on the door.' },
-      { title:'Level 2 - Fire Laboratory',
-        prompt:'Descend one floor. Where heat meets safety, flames are studied not feared. Enter the room name',
-        hint:'Look in window sticker' },
-      { title:'Level 3 - 3D Printing Workshop',
-        prompt:'Descend again. Where ideas become matter one layer at a time. Stacked 4 x 2 whats my make',
-        hint:'Check the machine tag.' },
-      { title:'Level 4 - Motorsport and Composites Lab',
-        prompt:'Go down two floors (skip one). Engines sleep and carbon weaves dream of speed. Enter the team name, a room label, or a code you find near the car.',
-        hint:'Look near the steering wheel or composite layup.' },
-      { title:'Level 5 - Simulation Lab (Lower Ground)',
-        prompt:'Descend to the lower ground. What flies safely is rehearsed here first. Enter the room number or a keyword you find there (for example, Simulation or Sim Lab).',
-        hint:'Check the door plaque or console.' },
-      { title:'Level 6 - CNC Workshop Finale',
-        prompt:'Final step. Creation obeys a number. From previous clues, determine the CNC program number (for example, 5 for a 5 axis hint). Enter that number now.',
-        hint:'Think: axis count to program number.' }
-    ];
-
-    // ---------- UI ----------
-    function makeRoom(i, room){
-      var div=document.createElement('div');
-      div.className='card room'+(i===0?' active':'');
-      div.setAttribute('data-index', String(i));
-      div.innerHTML=''+
-        '<h2 style="margin:0 0 .5rem 0">'+room.title+'</h2>'+
-        '<div class="q">'+nl2br(room.prompt)+'</div>'+
-        '<div class="controls">'+
-          '<input type="text" placeholder="Type your answer..." aria-label="answer input">'+
-          '<button class="submit">Submit</button>'+
-          '<button class="next" disabled>Next Room -></button>'+
-        '</div>'+
-        '<div class="feedback" aria-live="polite"></div>'+
-        '<div class="hint">Hint: '+(room.hint||'')+'</div>';
-
-      var input=div.querySelector('input');
-      var submit=div.querySelector('.submit');
-      var next=div.querySelector('.next');
-      var fb=div.querySelector('.feedback');
-
-      submit.addEventListener('click', function(){
-        var val=input.value;
-        submit.disabled=true; fb.textContent='Checking...'; fb.className='feedback';
-        verify(i, val).then(function(ok){
-          submit.disabled=false;
-          if(ok){ fb.textContent='Correct!'; fb.className='feedback ok'; next.disabled=false; next.focus(); }
-          else { fb.textContent='Not yet - try again!'; fb.className='feedback err'; }
-        });
-      });
-
-      next.addEventListener('click', function(){
-        var idx=parseInt(div.getAttribute('data-index'),10);
-        div.classList.remove('active');
-        if(idx+1<ROOMS.length){
-          var sel='.room[data-index="'+(idx+1)+'"]';
-          var nxt=document.querySelector(sel);
-          if(!nxt){ showFatal('Could not find next room'); return; }
-          nxt.classList.add('active');
-          var f=nxt.querySelector('input'); if(f) f.focus();
-        } else { celebrate(); }
-      });
-
-      return div;
-    }
-
-    function build(){
-      try{
-        roomsEl.innerHTML='';
-        for(var i=0;i<ROOMS.length;i++){ roomsEl.appendChild(makeRoom(i, ROOMS[i])); }
-        var first=document.querySelector('.room[data-index="0"]');
-        if(!first){ showFatal('Rooms failed to render'); }
-      }catch(e){ showFatal(e && e.message ? e.message : 'render error'); }
-    }
-
-    function celebrate(){
-      var canvas=document.querySelector('.confetti');
-      var ctx=canvas.getContext('2d');
-      function resize(){ canvas.width=innerWidth; canvas.height=innerHeight; }
-      resize(); addEventListener('resize',resize);
-      var parts=[]; for(var i=0;i<200;i++){ parts.push({x:Math.random()*canvas.width,y:-10-Math.random()*canvas.height,r:2+Math.random()*4,vy:2+Math.random()*3,vx:(Math.random()-0.5)*1.5}); }
-      var msg=document.createElement('div'); msg.className='card'; msg.style.position='fixed'; msg.style.left='50%'; msg.style.top='10%'; msg.style.transform='translateX(-50%)'; msg.style.zIndex='10'; msg.innerHTML='<h2>You escaped!</h2><p>Proceed to the CNC workshop and run your program.</p>'; document.body.appendChild(msg);
-      var t=0; (function loop(){ ctx.clearRect(0,0,canvas.width,canvas.height); for(var j=0;j<parts.length;j++){ var p=parts[j]; p.x+=p.vx; p.y+=p.vy; p.vy+=0.02; if(p.y>canvas.height+10){ p.y=-10; p.x=Math.random()*canvas.width; p.vy=2+Math.random()*3; } ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill(); } if(t++<1000) requestAnimationFrame(loop); })();
-    }
-
-    // Build now
-    build();
-  }
-
-  if(document.readyState==='loading'){
-    document.addEventListener('DOMContentLoaded', start);
-  } else { start(); }
-})();
-</script>
-<noscript>
-  <div class="card" style="border-color:#ef4444">This game requires JavaScript to run. Please enable JavaScript and reload.</div>
-</noscript>
-  
-  <!-- Load app logic from external file to avoid any inline-script blocking -->
+  <!-- Load app logic from external file -->
   <script src="app.js" defer></script>
 </body>
 </html>
