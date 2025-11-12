@@ -26,7 +26,7 @@ export default async function handler(req, res) {
 
     // Answers are set in Vercel → Settings → Environment Variables (Production)
     const ANSWERS = [
-      (process.env.A_L1 || 'vr204,vrsuite,virtualreality,vr').split(','),
+      (process.env.A_L1 || 'vr204,').split(','),
       (process.env.A_L2 || 'firelab02,firelab,flammability').split(','),
       (process.env.A_L3 || 'mk3s,prusa,3dprinting,3dprintingroom').split(','),
       (process.env.A_L4 || 'motorsport,velocity,composites,motorsportlab').split(','),
