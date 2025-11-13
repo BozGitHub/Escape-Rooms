@@ -169,7 +169,7 @@
     card.id = "timer-card";
     card.className = "card";
     card.style.position = "fixed";
-    card.style.top = "220px";
+    card.style.top = "280px";
     card.style.left = "50%";
     card.style.transform = "translateX(-50%)";
     card.style.zIndex = "50";
