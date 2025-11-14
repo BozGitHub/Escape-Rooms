@@ -1,20 +1,13 @@
-// app.js — dynamic questions, intros, hint penalty note, disappearing locks, shatter animation
+// app.js — dynamic questions, timer, hints (-1 min), progress (locks disappear), anti-F5 using localStorage, local leaderboard
 (function () {
-
-  //--------------------------------------------------
-  // CONFIG
-  //--------------------------------------------------
   var CONFIG = {
     COUNTDOWN_MINUTES: 25,
-    STATE_KEY: "escape_state_v3",
+    STATE_KEY: "escape_state_v1",
     SCORES_KEY: "escape_scores_v1",
-    SESSION_MAX_AGE_MS: 60 * 60 * 1000, // 1 hour
-    HINT_PENALTY_MS: 60000              // 1 minute
+    SESSION_MAX_AGE_MS: 60 * 60 * 1000,
+    HINT_PENALTY_MS: 60000
   };
 
-  //--------------------------------------------------
-  // GAME STATE
-  //--------------------------------------------------
   var state = {
     timeLeftMs: CONFIG.COUNTDOWN_MINUTES * 60 * 1000,
     timerId: null,
@@ -26,21 +19,9 @@
 
   var ROOMS = [];
 
-  //--------------------------------------------------
-  // HELPERS
-  //--------------------------------------------------
   function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
   function toStr(x) { return String(x == null ? "" : x); }
 
-  function disableAll() {
-    document.querySelectorAll("input,button").forEach(function (el) {
-      el.disabled = true;
-    });
-  }
-
-  //--------------------------------------------------
-  // OVERLAY
-  //--------------------------------------------------
   function showOverlay(title, bodyHtml) {
     var cover = document.createElement("div");
     cover.style.position = "fixed";
@@ -56,30 +37,24 @@
     box.className = "card";
     box.style.maxWidth = "720px";
     box.style.textAlign = "center";
-    box.innerHTML =
-      "<h2 style='margin-top:0'>" + title + "</h2>" +
-      "<div class='q'>" + bodyHtml + "</div>";
+    box.innerHTML = "<h2 style='margin-top:0'>" + toStr(title) + "</h2>" +
+      "<div class='q' style='margin-top:.5rem'>" + bodyHtml + "</div>";
 
     cover.appendChild(box);
     document.body.appendChild(cover);
-
     return { cover: cover, box: box };
   }
 
-  //--------------------------------------------------
-  // SAVE RESTORE STATE
-  //--------------------------------------------------
+  function disableAll() {
+    var els = document.querySelectorAll("input,button");
+    for (var i = 0; i < els.length; i++) els[i].disabled = true;
+  }
+
   function saveState() {
     try {
       state.lastUpdated = Date.now();
-      localStorage.setItem(CONFIG.STATE_KEY, JSON.stringify({
-        timeLeftMs: state.timeLeftMs,
-        current: state.current,
-        solved: state.solved,
-        hintsUsed: state.hintsUsed,
-        lastUpdated: state.lastUpdated
-      }));
-    } catch (e) { }
+      localStorage.setItem(CONFIG.STATE_KEY, JSON.stringify(state));
+    } catch (e) {}
   }
 
   function loadState() {
@@ -88,95 +63,105 @@
       if (!raw) return null;
       var data = JSON.parse(raw);
       if (!data || typeof data.timeLeftMs !== "number") return null;
-
       var age = Date.now() - (data.lastUpdated || 0);
       if (age > CONFIG.SESSION_MAX_AGE_MS) {
         localStorage.removeItem(CONFIG.STATE_KEY);
         return null;
       }
       return data;
-    } catch (e) { return null; }
-  }
-
-  function clearState() {
-    try { localStorage.removeItem(CONFIG.STATE_KEY); } catch (e) { }
-  }
-
-  //--------------------------------------------------
-  // LEADERBOARD STORAGE
-  //--------------------------------------------------
-  function getScores() {
-    try {
-      return JSON.parse(localStorage.getItem(CONFIG.SCORES_KEY) || "[]");
-    } catch {
-      return [];
+    } catch (e) {
+      return null;
     }
   }
 
-  function saveScores(a) {
-    localStorage.setItem(CONFIG.SCORES_KEY, JSON.stringify(a));
+  function clearState() {
+    try { localStorage.removeItem(CONFIG.STATE_KEY); } catch (e) {}
+  }
+
+  function getScores() {
+    try {
+      var raw = localStorage.getItem(CONFIG.SCORES_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) { return []; }
+  }
+
+  function saveScores(scores) {
+    try { localStorage.setItem(CONFIG.SCORES_KEY, JSON.stringify(scores)); } catch (e) {}
   }
 
   function addScore(name, secondsRemaining) {
     var scores = getScores();
     scores.push({
       name: name || "Unnamed team",
-      secondsRemaining,
+      secondsRemaining: secondsRemaining,
       timeLeftText: formatSeconds(secondsRemaining),
       date: new Date().toISOString().slice(0, 10)
     });
-    scores.sort((a, b) => b.secondsRemaining - a.secondsRemaining);
+    scores.sort(function (a, b) { return b.secondsRemaining - a.secondsRemaining; });
     saveScores(scores);
   }
 
-  //--------------------------------------------------
-  // FORMAT TIME
-  //--------------------------------------------------
   function formatSeconds(s) {
-    var m = Math.floor(s / 60);
+    var mm = Math.floor(s / 60);
     var ss = s % 60;
-    return (m < 10 ? "0" + m : m) + ":" + (ss < 10 ? "0" + ss : ss);
+    return (mm < 10 ? "0" + mm : mm) + ":" + (ss < 10 ? "0" + ss : ss);
   }
 
-  //--------------------------------------------------
-  // LOAD QUESTIONS.JSON
-  //--------------------------------------------------
+  function showLeaderboard() {
+    var scores = getScores();
+    if (!scores.length) {
+      showOverlay("Leaderboard", "<p>No scores recorded yet.</p>");
+      return;
+    }
+
+    var html = "<table style='width:100%;border-collapse:collapse;font-size:.95rem;'>" +
+      "<thead><tr><th>#</th><th>Team</th><th>Time Left</th><th>Date</th></tr></thead><tbody>";
+
+    for (var i = 0; i < scores.length; i++) {
+      var s = scores[i];
+      html += "<tr>" +
+        "<td>" + (i + 1) + "</td>" +
+        "<td>" + s.name + "</td>" +
+        "<td>" + s.timeLeftText + "</td>" +
+        "<td>" + s.date + "</td>" +
+        "</tr>";
+    }
+    html += "</tbody></table>";
+
+    showOverlay("Leaderboard", html);
+  }
+
   function loadQuestions() {
     return fetch("/questions.json")
-      .then(res => res.json())
-      .then(data => { ROOMS = data || []; })
-      .catch(() => { ROOMS = []; });
+      .then(function (res) { return res.json(); })
+      .then(function (data) { ROOMS = data || []; })
+      .catch(function () { ROOMS = []; });
   }
 
-  //--------------------------------------------------
-  // TIMER
-  //--------------------------------------------------
   function injectTimerCard() {
-  var card = document.createElement("div");
-  card.id = "timer-card";
-  card.className = "card";
+    var card = document.createElement("div");
+    card.id = "timer-card";
+    card.className = "card";
+    card.style.position = "fixed";
+    card.style.top = "200px";
+    card.style.left = "50%";
+    card.style.transform = "translateX(-50%)";
+    card.style.zIndex = "50";
+    card.style.maxWidth = "260px";
+    card.style.textAlign = "center";
 
-  // Better placement (below header, above padlocks)
-  card.style.position = "relative";
-  card.style.margin = "1.5rem auto 0 auto"; 
-  card.style.maxWidth = "260px";
-  card.style.textAlign = "center";
-  card.style.padding = "0.6rem 1.2rem";
+    card.innerHTML =
+      "<div style='font-size:0.8rem;color:#9da7b1;'>Time left</div>" +
+      "<div class='tval' style='font-size:1.8rem;font-weight:700;'>--:--</div>" +
+      "<div style='margin-top:4px;font-size:.75rem;color:#aaa;'>Hint costs time</div>";
 
-  card.innerHTML =
-    "<div style='font-size:0.8rem;color:#9da7b1;'>Time left</div>" +
-    "<div class='tval' style='font-size:1.8rem;font-weight:700;'>--:--</div>" +
-    "<div style='font-size:0.75rem;margin-top:.25rem;color:#eab308;'>Hints deduct 1 minute</div>";
-
-  // Insert BELOW <header> but ABOVE progress locks
-  var header = document.querySelector("header");
-  header.insertAdjacentElement("afterend", card);
-}
+    document.body.appendChild(card);
+  }
 
   function updateTimerDisplay() {
-    var tEl = document.querySelector("#timer-card .tval");
-    if (!tEl) return;
-    tEl.textContent = formatSeconds(Math.floor(state.timeLeftMs / 1000));
+    var el = document.querySelector("#timer-card .tval");
+    if (!el) return;
+    el.textContent = formatSeconds(Math.floor(state.timeLeftMs / 1000));
   }
 
   function startTimer() {
@@ -196,269 +181,203 @@
     state.timerId = null;
   }
 
-  function deductHintTime() {
+  function deductOneMinute() {
     state.timeLeftMs = clamp(state.timeLeftMs - CONFIG.HINT_PENALTY_MS, 0, CONFIG.COUNTDOWN_MINUTES * 60000);
     updateTimerDisplay();
     saveState();
   }
 
-  //--------------------------------------------------
-  // VERIFY ANSWERS VIA API
-  //--------------------------------------------------
-  function verify(level, answer) {
+  function verify(levelIndex, answer) {
     return fetch("/api/check", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ level, answer })
+      body: JSON.stringify({ level: levelIndex, answer: answer })
     })
-      .then(r => r.ok ? r.json() : { ok: false })
-      .then(d => !!d.ok)
-      .catch(() => false);
+      .then(function (r) { return r.ok ? r.json() : { ok: false }; })
+      .then(function (d) { return !!(d && d.ok); })
+      .catch(function () { return false; });
   }
 
-  //--------------------------------------------------
-  // SHATTER ANIMATION FOR LOCKS
-  //--------------------------------------------------
-  function shatterLock(el) {
-    if (!el) return;
-    el.style.transition = "transform 0.4s ease, opacity 0.4s ease";
-    el.style.transform = "scale(1.4) rotate(25deg)";
-    el.style.opacity = "0";
-    setTimeout(() => el.remove(), 400);
-  }
+  function injectProgressAndLeaderboardButton() {
+    var prog = document.createElement("div");
+    prog.id = "progress";
+    prog.className = "card";
+    prog.style.marginTop = "3rem";
 
-  //--------------------------------------------------
-  // PROGRESS BAR
-  //--------------------------------------------------
-  function injectProgressBar() {
+    prog.innerHTML =
+      "<div style='display:flex;justify-content:space-between;align-items:center;'>" +
+      "  <div class='ptext'></div>" +
+      "  <button class='view-leaderboard' style='font-size:.85rem;padding:.35rem .7rem;border:none;border-radius:.7rem;background:#1f2937;color:#e5e7eb;cursor:pointer;'>Leaderboard</button>" +
+      "</div>" +
+      "<div class='locks' style='font-size:1.6rem;margin-top:.4rem;'></div>";
+
     var wrap = document.querySelector(".wrap");
-    var roomsEl = document.getElementById("rooms");
+    wrap.insertBefore(prog, document.getElementById("rooms"));
 
-    var card = document.createElement("div");
-    card.id = "progress";
-    card.className = "card";
-    card.style.marginTop = "1rem";
-    card.style.textAlign = "center";
-
-    card.innerHTML =
-      "<div class='ptext' style='margin-bottom:.25rem;'></div>" +
-      "<div class='locks' style='font-size:1.7rem;display:flex;justify-content:center;gap:.35rem;'></div>";
-
-    wrap.insertBefore(card, roomsEl);
+    prog.querySelector(".view-leaderboard").addEventListener("click", showLeaderboard);
 
     updateProgress();
   }
 
   function updateProgress() {
-    var pt = document.querySelector("#progress .ptext");
-    var lockBox = document.querySelector("#progress .locks");
-
-    if (!pt || !lockBox) return;
-
     var total = ROOMS.length;
-    var solved = Object.keys(state.solved).length;
+    var locksEl = document.querySelector("#progress .locks");
+    var textEl = document.querySelector("#progress .ptext");
 
-    pt.textContent = "Level " + (state.current + 1) + " of " + total;
+    var locked = "";
+    var solvedCount = 0;
 
-    lockBox.innerHTML = "";
-
-    for (let i = 0; i < total; i++) {
-      if (state.solved[i]) {
-        let gone = document.createElement("span");
-        gone.textContent = "🔓";
-        gone.style.opacity = "0.45";
-        lockBox.appendChild(gone);
-      } else {
-        let lock = document.createElement("span");
-        lock.textContent = "🔒";
-        lock.dataset.index = i;
-        lock.style.cursor = "default";
-        lockBox.appendChild(lock);
-      }
+    for (var i = 0; i < total; i++) {
+      if (state.solved[i]) solvedCount++;
+      else locked += "🔒";
     }
+
+    if (locksEl) locksEl.textContent = locked;
+    if (textEl) textEl.textContent =
+      "Level " + (state.current + 1) + " of " + total +
+      "  (" + solvedCount + "/" + total + " unlocked)";
   }
 
-  //--------------------------------------------------
-  // FAIL & SUCCESS
-  //--------------------------------------------------
   function failMission() {
     disableAll();
     clearState();
-    showOverlay("Mission Failed", "<p>You ran out of time. The building remains sealed.</p>");
+    showOverlay("Mission failed", "You ran out of time.");
   }
 
   function celebrate() {
     stopTimer();
     disableAll();
-    var secondsRemaining = Math.floor(state.timeLeftMs / 1000);
+    var secs = Math.floor(state.timeLeftMs / 1000);
     clearState();
-    askForName(secondsRemaining);
+    askForNameAndSaveScore(secs);
   }
 
-  function askForName(secondsRemaining) {
-    var timeStr = formatSeconds(secondsRemaining);
+  function askForNameAndSaveScore(secs) {
+    var timeStr = formatSeconds(secs);
     var ov = showOverlay(
-      "Power Restored!",
+      "Power Restored",
       "<p>You escaped with <strong>" + timeStr + "</strong> remaining.</p>" +
-      "<p>Enter your team name:</p>" +
-      "<input id='teamname' style='padding:.5rem;width:70%;margin-top:.5rem;border-radius:.4rem;'>\
-       <button id='saven' style='margin-top:.7rem;padding:.45rem 1rem;border:none;border-radius:.4rem;background:#16a34a;color:white;cursor:pointer;'>Save</button>"
+      "<p>Enter a team name to save your score:</p>" +
+      "<div style='margin-top:.75rem;display:flex;gap:.5rem;justify-content:center;'>" +
+      "<input id='lb-name' placeholder='Team name' style='padding:.5rem;border-radius:.4rem;background:#000;color:#fff;border:1px solid #333;'>" +
+      "<button id='lb-save' style='padding:.5rem .9rem;border:none;border-radius:.4rem;background:#16a34a;color:#fff;'>Save</button>" +
+      "</div>"
     );
 
-    document.getElementById("saven").onclick = function () {
-      var name = document.getElementById("teamname").value.trim();
-      addScore(name, secondsRemaining);
+    var input = document.getElementById("lb-name");
+    var btn = document.getElementById("lb-save");
+    if (input) input.focus();
+
+    btn.addEventListener("click", function () {
+      addScore(input.value.trim(), secs);
       ov.cover.remove();
       showLeaderboard();
-    };
-  }
-
-  function showLeaderboard() {
-    var scores = getScores();
-    if (!scores.length) {
-      showOverlay("Leaderboard", "<p>No scores yet.</p>");
-      return;
-    }
-
-    var html = "<table style='width:100%;font-size:.95rem;'>\
-                 <tr><th>#</th><th>Team</th><th>Time</th><th>Date</th></tr>";
-
-    scores.forEach((s, i) => {
-      html += "<tr>\
-                 <td>" + (i + 1) + "</td>\
-                 <td>" + s.name + "</td>\
-                 <td>" + s.timeLeftText + "</td>\
-                 <td>" + s.date + "</td>\
-               </tr>";
     });
-
-    html += "</table>";
-
-    showOverlay("Leaderboard", html);
   }
 
-  //--------------------------------------------------
-  // BUILD ONE ROOM
-  //--------------------------------------------------
   function makeRoom(i, room) {
     var div = document.createElement("div");
     div.className = "card room" + (i === state.current ? " active" : "");
-    div.dataset.index = i;
+    div.setAttribute("data-index", i);
 
     div.innerHTML =
-      "<h2>" + toStr(room.title) + "</h2>" +
-      "<div class='q intro' style='color:#9da7b1;margin-bottom:.35rem;'>" + toStr(room.intro || "") + "</div>" +
-      "<div class='q prompt' style='white-space:pre-line;'>" + toStr(room.prompt || "") + "</div>" +
-      "<div class='controls' style='margin-top:.6rem;'>\
-         <input type='text' placeholder='Answer…'>\
-         <button class='submit'>Submit</button>\
-         <button class='hint'>Hint (-1:00)</button>\
-         <button class='next' disabled>Next →</button>\
-       </div>\
-       <div class='hint-text' style='display:none;color:#9da7b1;margin-top:.4rem;'>Hint: " + toStr(room.hint || "") + "</div>\
-       <div class='feedback' style='margin-top:.4rem;'></div>";
+      "<h2 style='margin:0 0 .5rem 0'>" + room.title + "</h2>" +
+      "<div class='q intro' style='margin-bottom:.4rem;'></div>" +
+      "<div class='q prompt' style='white-space:pre-line;'></div>" +
+      "<div class='controls' style='margin-top:.6rem;'>" +
+      "  <input type='text' placeholder='Type your answer...'>" +
+      "  <button class='submit'>Submit</button>" +
+      "  <button class='hint-btn'>Show Hint (-1:00)</button>" +
+      "  <button class='next' disabled>Next →</button>" +
+      "</div>" +
+      "<div class='hint-text' style='display:none;margin-top:.4rem;color:#9da7b1;'></div>" +
+      "<div class='feedback' style='margin-top:.3rem;'></div>";
 
+    var introEl = div.querySelector(".intro");
+    var promptEl = div.querySelector(".prompt");
+    var hintEl = div.querySelector(".hint-text");
+    var submit = div.querySelector(".submit");
+    var next = div.querySelector(".next");
+    var hintBtn = div.querySelector(".hint-btn");
+    var feedback = div.querySelector(".feedback");
     var input = div.querySelector("input");
-    var sub = div.querySelector(".submit");
-    var nxt = div.querySelector(".next");
-    var hintBtn = div.querySelector(".hint");
-    var hintTxt = div.querySelector(".hint-text");
-    var fb = div.querySelector(".feedback");
 
-    // Restore hint usage
+    introEl.textContent = room.intro || "";
+    promptEl.textContent = room.prompt || "";
+    hintEl.textContent = "Hint: " + (room.hint || "");
+
     if (state.hintsUsed[i]) {
-      hintTxt.style.display = "block";
-      hintBtn.textContent = "Hint used";
+      hintEl.style.display = "block";
+      hintBtn.textContent = "Hint used (-1:00)";
       hintBtn.disabled = true;
     }
 
-    // Restore solved
     if (state.solved[i]) {
-      fb.textContent = "Correct!";
-      nxt.disabled = false;
+      feedback.textContent = "Correct!";
+      next.disabled = false;
     }
 
-    // Submit listener
-    sub.onclick = function () {
-      fb.textContent = "Checking…";
-      sub.disabled = true;
+    submit.addEventListener("click", function () {
+      submit.disabled = true;
+      feedback.textContent = "Checking...";
 
-      verify(i, input.value).then(ok => {
-        sub.disabled = false;
+      verify(i, input.value).then(function (ok) {
+        submit.disabled = false;
         if (ok) {
-          fb.textContent = "Correct!";
           state.solved[i] = true;
-          nxt.disabled = true; // will enable after lock shatter
-
-          // SHATTER LOCK
-          var lock = document.querySelector('#progress .locks span[data-index="' + i + '"]');
-          shatterLock(lock);
-
-          setTimeout(() => {
-            nxt.disabled = false;
-          }, 300);
-
+          feedback.textContent = "Correct!";
+          next.disabled = false;
           updateProgress();
           saveState();
         } else {
-          fb.textContent = "Not yet — try again!";
+          feedback.textContent = "Not yet — try again!";
         }
       });
-    };
+    });
 
-    // Hint button
-    hintBtn.onclick = function () {
+    hintBtn.addEventListener("click", function () {
       if (state.hintsUsed[i]) return;
-
       state.hintsUsed[i] = true;
-      hintTxt.style.display = "block";
-      hintBtn.textContent = "Hint used";
+      hintEl.style.display = "block";
+      hintBtn.textContent = "Hint used (-1:00)";
       hintBtn.disabled = true;
-
-      deductHintTime();
+      deductOneMinute();
       saveState();
-    };
+    });
 
-    // Next room
-    nxt.onclick = function () {
+    next.addEventListener("click", function () {
+      var idx = parseInt(div.getAttribute("data-index"), 10);
       div.classList.remove("active");
-      if (i + 1 < ROOMS.length) {
-        state.current = i + 1;
-        document.querySelector('.room[data-index="' + (i + 1) + '"]').classList.add("active");
+      if (idx + 1 < ROOMS.length) {
+        state.current = idx + 1;
+        document.querySelector('.room[data-index="' + (idx + 1) + '"]').classList.add("active");
         updateProgress();
         saveState();
       } else {
         celebrate();
       }
-    };
+    });
 
     return div;
   }
 
-  //--------------------------------------------------
-  // BUILD ALL ROOMS
-  //--------------------------------------------------
   function buildRooms() {
-    var el = document.getElementById("rooms");
-    el.innerHTML = "";
+    var container = document.getElementById("rooms");
+    container.innerHTML = "";
     for (var i = 0; i < ROOMS.length; i++) {
-      el.appendChild(makeRoom(i, ROOMS[i]));
+      container.appendChild(makeRoom(i, ROOMS[i]));
     }
   }
 
-  //--------------------------------------------------
-  // INIT GAME
-  //--------------------------------------------------
   function startGame() {
     injectTimerCard();
-    injectProgressBar();
+    injectProgressAndLeaderboardButton();
 
     var saved = loadState();
     if (saved && ROOMS.length) {
-      state.timeLeftMs = saved.timeLeftMs;
-      state.current = saved.current || 0;
-      state.solved = saved.solved || {};
-      state.hintsUsed = saved.hintsUsed || {};
+      state = saved;
+    } else {
+      clearState();
     }
 
     buildRooms();
@@ -470,8 +389,6 @@
     loadQuestions().then(startGame);
   }
 
-  if (document.readyState == "loading") {
-    document.addEventListener("DOMContentLoaded", start);
-  } else start();
-
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
+  else start();
 })();
