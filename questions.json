@@ -6,31 +6,31 @@
     "hint": "Try the room code on the door."
   },
   {
-    "title": "Level 2 - Fire Laboratory",
+    "title": "Level 3 - Fire Laboratory",
     "intro": "Heat shields line the walls. A red warning lamp ticks overhead.",
     "prompt": "Enter the room name or a label from the Fire Lab.",
     "hint": "Look at the window sticker."
   },
   {
-    "title": "Level 3 - 3D Printing Workshop",
+    "title": "Level 2 - 3D Printing Workshop",
     "intro": "A soft whirr rises and falls from the printers.",
     "prompt": "Enter the printer model code or workshop label.",
     "hint": "Check the machine tag."
   },
   {
-    "title": "Level 4 - Motorsport & Composites",
+    "title": "Level 0 - Motorsport & Composites",
     "intro": "A chassis sleeps on stands. Carbon sheets shimmer.",
     "prompt": "Enter the team name or a code near the car.",
     "hint": "Look near the steering wheel."
   },
   {
-    "title": "Level 5 - Simulation Lab",
+    "title": "Level -1 - Simulation Lab",
     "intro": "Panels glow. A digital horizon rolls across the screens.",
     "prompt": "Enter the sim lab door number or a console keyword.",
     "hint": "Check the door plaque."
   },
   {
-    "title": "Level 6 - CNC Workshop",
+    "title": "Level -1 - CNC Workshop",
     "intro": "Coolant scent in the air. The spindle awaits your code.",
     "prompt": "Enter the CNC program number.",
     "hint": "Axis count → program number."
