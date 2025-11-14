@@ -1,36 +1,36 @@
 [
   {
-    "title": "Level 4 - VR Suite",
+    "title": "Lift Level 4 - VR Suite",
     "intro": "3326Reality bends upstairs. Diagnostic beacons pulse along the corridor.",
     "prompt": "Find the VR Suite on the top floor. Enter the room number or keyword.",
     "hint": "Try the room code on the door."
   },
   {
-    "title": "Level 3 - Fire Laboratory",
+    "title": "Lift Level 3 - Fire Laboratory",
     "intro": "Heat shields line the walls. A red warning lamp ticks overhead.",
     "prompt": "Enter the room name or a label from the Fire Lab.",
     "hint": "Look at the window sticker."
   },
   {
-    "title": "Level 2 - 3D Printing Workshop",
+    "title": "Lift Level 2 - 3D Printing Workshop",
     "intro": "A soft whirr rises and falls from the printers.",
     "prompt": "Enter the printer model code or workshop label.",
     "hint": "Check the machine tag."
   },
   {
-    "title": "Level 0 - Motorsport & Composites",
+    "title": "Lift Level 0 ",
     "intro": "A chassis sleeps on stands. Carbon sheets shimmer.",
     "prompt": "Enter the team name or a code near the car.",
     "hint": "Look near the steering wheel."
   },
   {
-    "title": "Level -1 - Simulation Lab",
+    "title": "Lift Level -1 ",
     "intro": "Panels glow. A digital horizon rolls across the screens.",
     "prompt": "Enter the sim lab door number or a console keyword.",
     "hint": "Check the door plaque."
   },
   {
-    "title": "Level -1 - CNC Workshop",
+    "title": "Lift Level -1 - CNC Workshop",
     "intro": "Coolant scent in the air. The spindle awaits your code.",
     "prompt": "Enter the CNC program number.",
     "hint": "Axis count → program number."
