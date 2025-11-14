@@ -205,4 +205,144 @@
     div.setAttribute("data-index", i);
 
     div.innerHTML =
-      "<h2 style='margin:0 0 .5rem
+      "<h2 style='margin:0 0 .5rem 0'>" + room.title + "</h2>" +
+      "<div class='q intro' style='margin-bottom:.4rem;'></div>" +
+      "<div class='q prompt' style='white-space:pre-line;'></div>" +
+      "<div class='controls' style='margin-top:.6rem;'>\
+         <input type='text' placeholder='Type your answer...' aria-label='answer input'>\
+         <button class='submit'>Submit</button>\
+         <button class='hint-btn'>Show Hint (-1:00)</button>\
+         <button class='next' disabled>Next Room →</button>\
+       </div>" +
+      "<div class='hint-text' style='margin-top:.4rem; display:none; color:#9da7b1;'></div>" +
+      "<div class='feedback' style='margin-top:.3rem;'></div>";
+
+    var introEl = div.querySelector('.intro');
+    var promptEl = div.querySelector('.prompt');
+    var hintEl = div.querySelector('.hint-text');
+    var submit = div.querySelector('.submit');
+    var next = div.querySelector('.next');
+    var hintBtn = div.querySelector('.hint-btn');
+    var feedback = div.querySelector('.feedback');
+    var input = div.querySelector('input');
+
+    introEl.textContent = room.intro || "";
+    promptEl.textContent = room.prompt || "";
+    hintEl.textContent = "Hint: " + (room.hint || "");
+
+    if (state.hintsUsed[i]) {
+      hintEl.style.display = 'block';
+      hintBtn.textContent = 'Hint used (-1:00)';
+      hintBtn.disabled = true;
+    }
+
+    if (state.solved[i]) {
+      feedback.textContent = 'Correct!';
+      next.disabled = false;
+    }
+
+    submit.addEventListener('click', function () {
+      var val = input.value;
+      submit.disabled = true;
+      feedback.textContent = 'Checking...';
+
+      verify(i, val).then(function (ok) {
+        submit.disabled = false;
+        if (ok) {
+          state.solved[i] = true;
+          feedback.textContent = 'Correct!';
+          next.disabled = false;
+          updateProgress();
+          saveState();
+        } else {
+          flashIncorrect();
+        }
+      });
+    });
+
+    hintBtn.addEventListener('click', function () {
+      if (state.hintsUsed[i]) return;
+      state.hintsUsed[i] = true;
+      hintEl.style.display = 'block';
+      hintBtn.textContent = 'Hint used (-1:00)';
+      hintBtn.disabled = true;
+      deductOneMinute();
+      saveState();
+    });
+
+    next.addEventListener('click', function () {
+      var idx = parseInt(div.getAttribute('data-index'), 10);
+      div.classList.remove('active');
+      if (idx + 1 < ROOMS.length) {
+        state.current = idx + 1;
+        var nxt = document.querySelector('.room[data-index="' + (idx + 1) + '"]');
+        if (nxt) nxt.classList.add('active');
+        updateProgress();
+        saveState();
+      } else {
+        celebrate();
+      }
+    });
+
+    return div;
+  }
+
+  function buildRooms() {
+    var roomsEl = document.getElementById('rooms');
+    roomsEl.innerHTML = '';
+    for (var i = 0; i < ROOMS.length; i++) {
+      roomsEl.appendChild(makeRoom(i, ROOMS[i]));
+    }
+  }
+
+  function startGame() {
+    injectTimerCard();
+
+    var prog = document.createElement('div');
+    prog.id = 'progress';
+    prog.className = 'card';
+    prog.style.marginTop = '4rem';
+    prog.innerHTML = "<div class='ptext'></div><div class='locks' style='font-size:1.4rem;margin-top:.3rem;'></div>";
+
+    var wrap = document.querySelector('.wrap');
+    var roomsEl = document.getElementById('rooms');
+    wrap.insertBefore(prog, roomsEl);
+
+    var saved = loadState();
+    if (saved && ROOMS.length) {
+      state.timeLeftMs = saved.timeLeftMs;
+      state.current = saved.current || 0;
+      state.solved = saved.solved || {};
+      state.hintsUsed = saved.hintsUsed || {};
+    } else {
+      clearState();
+      state.timeLeftMs = CONFIG.COUNTDOWN_MINUTES * 60000;
+      state.current = 0;
+      state.solved = {};
+      state.hintsUsed = {};
+    }
+
+    buildRooms();
+    updateProgress();
+    startTimer();
+  }
+
+  function formatSeconds(s) {
+    var m = Math.floor(s / 60);
+    var sec = s % 60;
+    return (m < 10 ? '0' + m : m) + ':' + (sec < 10 ? '0' + sec : sec);
+  }
+
+  function start() {
+    loadQuestions().then(function () {
+      startGame();
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start);
+  } else {
+    start();
+  }
+
+})();
