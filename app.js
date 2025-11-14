@@ -1,9 +1,10 @@
-// app.js — dynamic questions, timer, hints (-1 min), progress (locks disappear), anti-F5 using localStorage
+// app.js — dynamic questions, timer, hints (configurable penalty), progress (locks disappear), anti-F5 using localStorage
 (function () {
   var CONFIG = {
     COUNTDOWN_MINUTES: 25,
     STATE_KEY: "escape_state_v1",
     SESSION_MAX_AGE_MS: 60 * 60 * 1000,
+    // change this to 300000 for 5 minutes, 120000 for 2 minutes, etc.
     HINT_PENALTY_MS: 60000
   };
 
@@ -107,30 +108,21 @@
       .catch(function () { ROOMS = []; });
   }
 
-  function injectTimerCard() {
-    var card = document.createElement("div");
-    card.id = "timer-card";
-    card.className = "card";
-    card.style.position = "fixed";
-    card.style.top = "200px";
-    card.style.left = "50%";
-    card.style.transform = "translateX(-50%)";
-    card.style.zIndex = "50";
-    card.style.maxWidth = "260px";
-    card.style.textAlign = "center";
-
-    card.innerHTML =
-      "<div style='font-size:0.8rem;color:#9da7b1;'>Time left</div>" +
-      "<div class='tval' style='font-size:1.8rem;font-weight:700;'>--:--</div>" +
-      "<div style='margin-top:4px;font-size:.75rem;color:#aaa;'>Hint costs time</div>";
-
-    document.body.appendChild(card);
-  }
-
+  // We no longer use a fixed timer card; timer lives inside rooms.
+  // But we keep updateTimerDisplay general so it can also update a global card if you add one later.
   function updateTimerDisplay() {
+    var seconds = Math.floor(state.timeLeftMs / 1000);
+    var text = formatSeconds(seconds);
+
+    // If a global timer exists, update it
     var el = document.querySelector("#timer-card .tval");
-    if (!el) return;
-    el.textContent = formatSeconds(Math.floor(state.timeLeftMs / 1000));
+    if (el) el.textContent = text;
+
+    // Update all inline timers inside rooms
+    var spans = document.querySelectorAll(".inline-tval");
+    for (var i = 0; i < spans.length; i++) {
+      spans[i].textContent = text;
+    }
   }
 
   function startTimer() {
@@ -139,7 +131,10 @@
       state.timeLeftMs = clamp(state.timeLeftMs - 1000, 0, CONFIG.COUNTDOWN_MINUTES * 60000);
       updateTimerDisplay();
       saveState();
-      if (state.timeLeftMs <= 0) { stopTimer(); failMission(); }
+      if (state.timeLeftMs <= 0) {
+        stopTimer();
+        failMission();
+      }
     }
     state.timerId = setInterval(tick, 1000);
     updateTimerDisplay();
@@ -151,7 +146,11 @@
   }
 
   function deductOneMinute() {
-    state.timeLeftMs = clamp(state.timeLeftMs - CONFIG.HINT_PENALTY_MS, 0, CONFIG.COUNTDOWN_MINUTES * 60000);
+    state.timeLeftMs = clamp(
+      state.timeLeftMs - CONFIG.HINT_PENALTY_MS,
+      0,
+      CONFIG.COUNTDOWN_MINUTES * 60000
+    );
     updateTimerDisplay();
     saveState();
   }
@@ -196,7 +195,7 @@
     stopTimer();
     disableAll();
     clearState();
-    showOverlay("Escaped!", "You restored power and escaped!");
+    showOverlay("Escaped!", "Congratulations — you escaped!");
   }
 
   function makeRoom(i, room) {
@@ -212,10 +211,10 @@
       "<div class='controls' style='margin-top:.6rem;'>\
          <input type='text' placeholder='Type your answer...' aria-label='answer input'>\
          <button class='submit'>Submit</button>\
-         <button class='hint-btn'>Show Hint (-1:00)</button>\
+         <button class='hint-btn'>Show Hint</button>\
          <button class='next' disabled>Next Room →</button>\
        </div>" +
-      "<div class='hint-text' style='margin-top:.4rem; display:none; color:#9da7b1;'>" style='margin-top:.4rem; display:none; color:#9da7b1;'></div>" +
+      "<div class='hint-text' style='margin-top:.4rem; display:none; color:#9da7b1;'></div>" +
       "<div class='feedback' style='margin-top:.3rem;'></div>";
 
     var introEl = div.querySelector('.intro');
@@ -231,9 +230,13 @@
     promptEl.textContent = room.prompt || "";
     hintEl.textContent = "Hint: " + (room.hint || "");
 
+    // Set button text to reflect penalty in minutes
+    var penaltyMinutes = CONFIG.HINT_PENALTY_MS / 60000;
+    hintBtn.textContent = "Show Hint (-" + penaltyMinutes + ":00)";
+
     if (state.hintsUsed[i]) {
       hintEl.style.display = 'block';
-      hintBtn.textContent = 'Hint used (-1:00)';
+      hintBtn.textContent = "Hint used (-" + penaltyMinutes + ":00)";
       hintBtn.disabled = true;
     }
 
@@ -265,7 +268,7 @@
       if (state.hintsUsed[i]) return;
       state.hintsUsed[i] = true;
       hintEl.style.display = 'block';
-      hintBtn.textContent = 'Hint used (-1:00)';
+      hintBtn.textContent = "Hint used (-" + penaltyMinutes + ":00)";
       hintBtn.disabled = true;
       deductOneMinute();
       saveState();
@@ -294,11 +297,12 @@
     for (var i = 0; i < ROOMS.length; i++) {
       roomsEl.appendChild(makeRoom(i, ROOMS[i]));
     }
+    // after rooms exist, sync timers once
+    updateTimerDisplay();
   }
 
   function startGame() {
-    injectTimerCard();
-
+    // Progress card
     var prog = document.createElement('div');
     prog.id = 'progress';
     prog.className = 'card';
