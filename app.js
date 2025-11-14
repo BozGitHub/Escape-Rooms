@@ -205,7 +205,4 @@
     div.setAttribute("data-index", i);
 
     div.innerHTML =
-      "<h2 style='margin:0 0 .5rem 0'>" + room.title + "</h2>" +
-      "<div class='q intro' style='margin-bottom:.4rem;'></div>" +
-      "<div class='q prompt' style='white-space:pre-line;'></div>" +
-      "<div class='controls'
+      "<h2 style='margin:0 0 .5rem
