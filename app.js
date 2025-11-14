@@ -208,13 +208,14 @@
       "<h2 style='margin:0 0 .5rem 0'>" + room.title + "</h2>" +
       "<div class='q intro' style='margin-bottom:.4rem;'></div>" +
       "<div class='q prompt' style='white-space:pre-line;'></div>" +
+      "<div class='inline-timer' style='margin:0.6rem 0;font-size:1.4rem;font-weight:700;text-align:center;color:#ffd700;'>⏱ <span class='inline-tval'>--:--</span></div>" +
       "<div class='controls' style='margin-top:.6rem;'>\
          <input type='text' placeholder='Type your answer...' aria-label='answer input'>\
          <button class='submit'>Submit</button>\
          <button class='hint-btn'>Show Hint (-1:00)</button>\
          <button class='next' disabled>Next Room →</button>\
        </div>" +
-      "<div class='hint-text' style='margin-top:.4rem; display:none; color:#9da7b1;'></div>" +
+      "<div class='hint-text' style='margin-top:.4rem; display:none; color:#9da7b1;'>" style='margin-top:.4rem; display:none; color:#9da7b1;'></div>" +
       "<div class='feedback' style='margin-top:.3rem;'></div>";
 
     var introEl = div.querySelector('.intro');
