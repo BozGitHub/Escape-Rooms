@@ -1,13 +1,12 @@
-// app.js — Fully Working Version (Timer at 260px, Hints, Leaderboard, Anti-F5)
+// app.js — Escape Room (timer, hints, progress, shatter locks, leaderboard, anti-F5)
 (function () {
   var CONFIG = {
     COUNTDOWN_MINUTES: 25,
+    HINT_PENALTY_MS: 60 * 1000,     // 1 minute per hint (change if you like)
     STATE_KEY: "escape_state_v1",
     SCORES_KEY: "escape_scores_v1",
-    SESSION_MAX_AGE_MS: 60 * 60 * 1000 // 1 hour
+    SESSION_MAX_AGE_MS: 60 * 60 * 1000  // 1 hour
   };
-
-  var HINT_PENALTY_MS = 60 * 1000; // 1 minute
 
   var state = {
     timeLeftMs: CONFIG.COUNTDOWN_MINUTES * 60 * 1000,
@@ -19,10 +18,20 @@
   };
 
   var ROOMS = [];
+  var prevRemainingLocks = null;
 
   // ---------- Helpers ----------
   function toStr(x) { return String(x == null ? "" : x); }
-  function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
+
+  function clamp(n, a, b) {
+    return Math.max(a, Math.min(b, n));
+  }
+
+  function formatSeconds(s) {
+    var mm = Math.floor(s / 60);
+    var ss = s % 60;
+    return (mm < 10 ? "0" + mm : mm) + ":" + (ss < 10 ? "0" + ss : ss);
+  }
 
   function disableAll() {
     var els = document.querySelectorAll("input,button");
@@ -53,17 +62,18 @@
     return { cover: cover, box: box };
   }
 
-  // ---------- localStorage state ----------
+  // ---------- State persistence (anti-F5) ----------
   function saveState() {
     try {
       state.lastUpdated = Date.now();
-      localStorage.setItem(CONFIG.STATE_KEY, JSON.stringify({
+      var data = {
         timeLeftMs: state.timeLeftMs,
         current: state.current,
         solved: state.solved,
         hintsUsed: state.hintsUsed,
         lastUpdated: state.lastUpdated
-      }));
+      };
+      localStorage.setItem(CONFIG.STATE_KEY, JSON.stringify(data));
     } catch (e) {}
   }
 
@@ -72,27 +82,32 @@
       var raw = localStorage.getItem(CONFIG.STATE_KEY);
       if (!raw) return null;
       var data = JSON.parse(raw);
-      if (!data) return null;
-
-      if (Date.now() - data.lastUpdated > CONFIG.SESSION_MAX_AGE_MS) {
+      if (!data || typeof data.timeLeftMs !== "number") return null;
+      var age = Date.now() - (data.lastUpdated || 0);
+      if (age > CONFIG.SESSION_MAX_AGE_MS) {
         localStorage.removeItem(CONFIG.STATE_KEY);
         return null;
       }
-
       return data;
-    } catch (e) { return null; }
+    } catch (e) {
+      return null;
+    }
   }
 
   function clearState() {
     try { localStorage.removeItem(CONFIG.STATE_KEY); } catch (e) {}
   }
 
-  // ---------- Leaderboard localStorage ----------
+  // ---------- Leaderboard (local to browser) ----------
   function getScores() {
     try {
       var raw = localStorage.getItem(CONFIG.SCORES_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch (e) { return []; }
+      if (!raw) return [];
+      var arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) {
+      return [];
+    }
   }
 
   function saveScores(scores) {
@@ -103,26 +118,19 @@
   function addScore(name, secondsRemaining) {
     var scores = getScores();
     scores.push({
-      name: name || "Team",
+      name: name || "Unnamed team",
       secondsRemaining: secondsRemaining,
       timeLeftText: formatSeconds(secondsRemaining),
       date: new Date().toISOString().slice(0, 10)
     });
-
     scores.sort(function (a, b) { return b.secondsRemaining - a.secondsRemaining; });
     saveScores(scores);
-  }
-
-  function formatSeconds(s) {
-    var mm = Math.floor(s / 60);
-    var ss = s % 60;
-    return (mm < 10 ? "0" + mm : mm) + ":" + (ss < 10 ? "0" + ss : ss);
   }
 
   function showLeaderboard() {
     var scores = getScores();
     if (!scores.length) {
-      showOverlay("Leaderboard", "<p>No scores yet.</p>");
+      showOverlay("Leaderboard", "<p>No scores recorded yet.</p>");
       return;
     }
 
@@ -141,15 +149,14 @@
         "<td style='padding:.3rem;'>" + s.name + "</td>" +
         "<td style='padding:.3rem;'>" + s.timeLeftText + "</td>" +
         "<td style='padding:.3rem;'>" + s.date + "</td>" +
-        "</tr>";
+      "</tr>";
     }
 
     html += "</tbody></table>";
-
     showOverlay("Leaderboard", html);
   }
 
-  // ---------- Load external questions ----------
+  // ---------- Load questions.json ----------
   function loadQuestions() {
     return fetch("/questions.json")
       .then(function (res) { return res.json(); })
@@ -163,7 +170,7 @@
     card.id = "timer-card";
     card.className = "card";
     card.style.position = "fixed";
-    card.style.top = "260px";
+    card.style.top = "260px";          // you asked for this lower position
     card.style.left = "50%";
     card.style.transform = "translateX(-50%)";
     card.style.zIndex = "50";
@@ -172,22 +179,28 @@
     card.style.padding = "0.6rem 1.2rem";
 
     card.innerHTML =
-      "<div style='font-size:0.8rem;text-transform:uppercase;color:#9da7b1;'>Time left</div>" +
-      "<div class='tval' style='font-size:1.6rem;font-weight:700;margin-top:.15rem;'>--:--</div>";
+      "<div style='font-size:0.8rem;letter-spacing:1px;text-transform:uppercase;color:#9da7b1;'>Time left</div>" +
+      "<div class='tval' style='font-size:1.6rem;font-weight:700;margin-top:.15rem;'>--:--</div>" +
+      "<div style='margin-top:.4rem;font-size:0.75rem;color:#fbbf24;'>Using a hint deducts time!</div>";
 
     document.body.appendChild(card);
   }
 
   function updateTimerDisplay() {
-    var t = document.querySelector("#timer-card .tval");
-    if (!t) return;
-    t.textContent = formatSeconds(Math.floor(state.timeLeftMs / 1000));
+    var tEl = document.querySelector("#timer-card .tval");
+    if (!tEl) return;
+    var s = Math.floor(state.timeLeftMs / 1000);
+    tEl.textContent = formatSeconds(s);
   }
 
   function startTimer() {
     stopTimer();
     state.timerId = setInterval(function () {
-      state.timeLeftMs = Math.max(0, state.timeLeftMs - 1000);
+      state.timeLeftMs = clamp(
+        state.timeLeftMs - 1000,
+        0,
+        CONFIG.COUNTDOWN_MINUTES * 60 * 1000
+      );
       updateTimerDisplay();
       saveState();
       if (state.timeLeftMs <= 0) {
@@ -195,7 +208,6 @@
         failMission();
       }
     }, 1000);
-
     updateTimerDisplay();
   }
 
@@ -206,13 +218,17 @@
     }
   }
 
-  function deductOneMinute() {
-    state.timeLeftMs = Math.max(0, state.timeLeftMs - HINT_PENALTY_MS);
+  function deductHintTime() {
+    state.timeLeftMs = clamp(
+      state.timeLeftMs - CONFIG.HINT_PENALTY_MS,
+      0,
+      CONFIG.COUNTDOWN_MINUTES * 60 * 1000
+    );
     updateTimerDisplay();
     saveState();
   }
 
-  // ---------- Server verification ----------
+  // ---------- Server verify ----------
   function verify(levelIndex, answer) {
     return fetch("/api/check", {
       method: "POST",
@@ -220,132 +236,150 @@
       body: JSON.stringify({ level: levelIndex, answer: answer })
     })
       .then(function (r) { return r.ok ? r.json() : { ok: false }; })
-      .then(function (d) { return !!d.ok; })
+      .then(function (d) { return !!(d && d.ok); })
       .catch(function () { return false; });
   }
 
-  // ---------- Progress padlocks ----------
+  // ---------- Shatter effect (gold debris) ----------
+  function shatterLocks(element) {
+    if (!element) return;
+
+    var rect = element.getBoundingClientRect();
+    var cx = rect.left + rect.width / 2;
+    var cy = rect.top + rect.height / 2;
+
+    var canvas = document.createElement("canvas");
+    canvas.style.position = "fixed";
+    canvas.style.left = "0";
+    canvas.style.top = "0";
+    canvas.style.pointerEvents = "none";
+    canvas.style.zIndex = "9999";
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    document.body.appendChild(canvas);
+
+    var ctx = canvas.getContext("2d");
+    var parts = [];
+    var i;
+
+    for (i = 0; i < 40; i++) {
+      parts.push({
+        x: cx,
+        y: cy,
+        r: 2 + Math.random() * 3,
+        vx: (Math.random() - 0.5) * 10,
+        vy: (Math.random() - 0.7) * 10,
+        a: 1
+      });
+    }
+
+    function anim() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      var alive = false;
+
+      for (var j = 0; j < parts.length; j++) {
+        var p = parts[j];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.4;
+        p.a *= 0.93;
+
+        if (p.a > 0.05) alive = true;
+
+        ctx.globalAlpha = p.a;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = "#facc15"; // gold
+        ctx.fill();
+      }
+
+      if (alive) {
+        requestAnimationFrame(anim);
+      } else {
+        document.body.removeChild(canvas);
+      }
+    }
+
+    requestAnimationFrame(anim);
+  }
+
+  // ---------- Progress card (locks that disappear) ----------
   function injectProgress() {
     var prog = document.createElement("div");
     prog.id = "progress";
     prog.className = "card";
     prog.style.marginTop = "4rem";
-
     prog.innerHTML =
       "<div class='ptext'></div>" +
       "<div class='locks' style='font-size:1.4rem;margin-top:.3rem;'></div>";
 
     var wrap = document.querySelector(".wrap");
     var roomsEl = document.getElementById("rooms");
-    wrap.insertBefore(prog, roomsEl);
-
-    updateProgress();
-  }
-
-  function updateProgress() {
-    if (!ROOMS.length) return;
-    var total = ROOMS.length;
-    var solved = Object.keys(state.solved).length;
-
-    var ptext = document.querySelector("#progress .ptext");
-    var locks = document.querySelector("#progress .locks");
-
-    if (ptext)
-      ptext.textContent =
-        "Level " + (state.current + 1) + " of " + total +
-        " (" + solved + "/" + total + " unlocked)";
-
-    if (locks) {
-      var str = "";
-      for (var i = 0; i < total; i++)
-        str += state.solved[i] ? "🔓" : "🔒";
-      locks.textContent = str;
+    if (wrap && roomsEl) {
+      wrap.insertBefore(prog, roomsEl);
     }
   }
 
-  // ---------- Confetti ----------
-  function burstAtElement(el) {
-    try {
-      var rect = el.getBoundingClientRect();
-      var cx = rect.left + rect.width / 2;
-      var cy = rect.top + rect.height / 2;
+  function updateProgress() {
+    var total = ROOMS.length;
+    if (!total) return;
 
-      var canvas = document.createElement("canvas");
-      canvas.className = "confetti-burst";
-      canvas.style.position = "fixed";
-      canvas.style.left = "0";
-      canvas.style.top = "0";
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      canvas.style.pointerEvents = "none";
-      canvas.style.zIndex = "20";
-      document.body.appendChild(canvas);
+    var solvedCount = 0;
+    var i;
+    for (i = 0; i < total; i++) {
+      if (state.solved[i]) solvedCount++;
+    }
 
-      var ctx = canvas.getContext("2d");
-      var parts = [];
-      var i;
+    var remaining = total - solvedCount;
 
-      for (i = 0; i < 60; i++) {
-        parts.push({
-          x: cx, y: cy,
-          r: 2 + Math.random() * 3,
-          vx: (Math.random() - 0.5) * 6,
-          vy: (Math.random() - 1) * 6,
-          a: 1
-        });
+    var ptext = document.querySelector("#progress .ptext");
+    var locksEl = document.querySelector("#progress .locks");
+
+    if (ptext) {
+      ptext.textContent =
+        "Level " + (state.current + 1) + " of " + total +
+        "  (" + solvedCount + "/" + total + " completed)";
+    }
+
+    if (locksEl) {
+      // If a new room got solved, remaining went down -> shatter
+      if (prevRemainingLocks !== null && remaining < prevRemainingLocks) {
+        shatterLocks(locksEl);
       }
+      locksEl.textContent = (remaining > 0) ? "🔒".repeat(remaining) : "";
+    }
 
-      function anim() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        var alive = false;
-
-        for (var j = 0; j < parts.length; j++) {
-          var p = parts[j];
-          p.x += p.vx;
-          p.y += p.vy;
-          p.vy += 0.15;
-          p.a *= 0.97;
-
-          if (p.a > 0.05) alive = true;
-
-          ctx.globalAlpha = Math.max(0, p.a);
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        if (alive) requestAnimationFrame(anim);
-        else document.body.removeChild(canvas);
-      }
-
-      anim();
-    } catch (e) {}
+    prevRemainingLocks = remaining;
   }
 
   // ---------- Fail & Success ----------
   function failMission() {
     disableAll();
     clearState();
-    showOverlay("Mission failed", "<p>You ran out of time.</p>");
+    showOverlay("Mission failed", "<p>You ran out of time. The building remains sealed.</p>");
   }
 
   function celebrate() {
     stopTimer();
     disableAll();
-    var sec = Math.floor(state.timeLeftMs / 1000);
+    var secondsRemaining = Math.floor(state.timeLeftMs / 1000);
     clearState();
-    askForNameAndSaveScore(sec);
+    askForNameAndSaveScore(secondsRemaining);
   }
 
-  function askForNameAndSaveScore(sec) {
-    var timeStr = formatSeconds(sec);
+  function askForNameAndSaveScore(secondsRemaining) {
+    var timeStr = formatSeconds(secondsRemaining);
     var ov = showOverlay(
       "Power Restored",
-      "<p>You escaped with <strong>" + timeStr + "</strong> remaining.</p>" +
-      "<p>Enter your team name to save your score:</p>" +
+      "<p>You escaped with <strong>" + timeStr + "</strong> left on the clock.</p>" +
+      "<p>Enter your team name to save your score to this computer's leaderboard.</p>" +
       "<div style='margin-top:.75rem;display:flex;gap:.5rem;justify-content:center;'>" +
-      "<input type='text' id='lb-name' placeholder='Team name' style='padding:.5rem .7rem;border-radius:.5rem;border:1px solid #374151;background:#020617;color:#e5e7eb;min-width:180px;'>" +
-      "<button id='lb-save' style='padding:.5rem .9rem;border-radius:.5rem;border:none;background:#16a34a;color:#fff;font-weight:600;cursor:pointer;'>Save</button>" +
+        "<input type='text' id='lb-name' placeholder='Team name' " +
+          "style='padding:.5rem 0.7rem;border-radius:.5rem;border:1px solid #374151;" +
+          "background:#020617;color:#e5e7eb;min-width:180px;'>" +
+        "<button id='lb-save' " +
+          "style='padding:.5rem 0.9rem;border-radius:.5rem;border:none;" +
+          "background:#16a34a;color:#fff;font-weight:600;cursor:pointer;'>Save</button>" +
       "</div>"
     );
 
@@ -356,54 +390,61 @@
 
     if (btn) {
       btn.addEventListener("click", function () {
-        addScore(input.value.trim(), sec);
+        var name = input ? input.value.trim() : "";
+        addScore(name, secondsRemaining);
         ov.cover.remove();
         showLeaderboard();
       });
     }
   }
 
-  // ---------- Build Rooms ----------
+  // ---------- Rooms ----------
   function makeRoom(i, room) {
     var div = document.createElement("div");
     div.className = "card room" + (i === state.current ? " active" : "");
-    div.setAttribute("data-index", i);
+    div.setAttribute("data-index", String(i));
+
+    var title = toStr(room.title || ("Level " + (i + 1)));
+    var prompt = toStr(room.prompt || "");
+    var hint = toStr(room.hint || "");
 
     div.innerHTML =
-      "<h2 style='margin:0 0 .5rem 0'>" + room.title + "</h2>" +
-      "<div class='q'>" + room.prompt + "</div>" +
+      "<h2 style='margin:0 0 .5rem 0'>" + title + "</h2>" +
+      "<div class='q prompt' style='white-space:pre-line;'>" + prompt + "</div>" +
       "<div class='controls' style='margin-top:.6rem;'>" +
-        "<input type='text' placeholder='Type your answer...'>" +
+        "<input type='text' placeholder='Type your answer...' aria-label='answer input'>" +
         "<button class='submit'>Submit</button>" +
         "<button class='hint-btn'>Show Hint (-1:00)</button>" +
         "<button class='next' disabled>Next Room →</button>" +
       "</div>" +
-      "<div class='hint-text' style='display:none;color:#9da7b1;margin-top:.4rem;'>Hint: " + (room.hint || "") + "</div>" +
+      "<div class='hint-text' style='margin-top:.4rem; display:none; color:#9da7b1;'>Hint: " + hint + "</div>" +
       "<div class='feedback' style='margin-top:.3rem;'></div>";
 
     var input = div.querySelector("input");
     var submit = div.querySelector(".submit");
     var next = div.querySelector(".next");
     var hintBtn = div.querySelector(".hint-btn");
-    var hintText = div.querySelector(".hint-text");
+    var hintEl = div.querySelector(".hint-text");
     var fb = div.querySelector(".feedback");
 
-    // restore hint
+    // restore hint state
     if (state.hintsUsed[i]) {
-      hintText.style.display = "block";
+      hintEl.style.display = "block";
       hintBtn.textContent = "Hint used (-1:00)";
       hintBtn.disabled = true;
     }
 
-    // restore solved
+    // restore solved state
     if (state.solved[i]) {
       fb.textContent = "Correct!";
       fb.className = "feedback ok";
       next.disabled = false;
     }
 
+    // Submit handler
     submit.addEventListener("click", function () {
       var val = input.value.trim();
+      if (!val) return;
       submit.disabled = true;
       fb.textContent = "Checking...";
       fb.className = "feedback";
@@ -415,7 +456,6 @@
           fb.textContent = "Correct!";
           fb.className = "feedback ok";
           next.disabled = false;
-          burstAtElement(submit);
           updateProgress();
           saveState();
         } else {
@@ -425,16 +465,18 @@
       });
     });
 
+    // Hint handler
     hintBtn.addEventListener("click", function () {
       if (state.hintsUsed[i]) return;
       state.hintsUsed[i] = true;
-      hintText.style.display = "block";
+      hintEl.style.display = "block";
       hintBtn.textContent = "Hint used (-1:00)";
       hintBtn.disabled = true;
-      deductOneMinute();
+      deductHintTime();
       saveState();
     });
 
+    // Next handler
     next.addEventListener("click", function () {
       var idx = parseInt(div.getAttribute("data-index"), 10);
       div.classList.remove("active");
@@ -456,24 +498,29 @@
   function buildRooms() {
     var roomsEl = document.getElementById("rooms");
     roomsEl.innerHTML = "";
-    for (var i = 0; i < ROOMS.length; i++) {
+    var i;
+    for (i = 0; i < ROOMS.length; i++) {
       roomsEl.appendChild(makeRoom(i, ROOMS[i]));
     }
   }
 
-  // ---------- Start Game ----------
+  // ---------- Start flow ----------
   function startGame() {
     injectTimerCard();
     injectProgress();
 
     var saved = loadState();
-    if (saved) {
+    if (saved && ROOMS.length) {
       state.timeLeftMs = saved.timeLeftMs;
-      state.current = saved.current;
-      state.solved = saved.solved;
-      state.hintsUsed = saved.hintsUsed;
+      state.current = saved.current || 0;
+      state.solved = saved.solved || {};
+      state.hintsUsed = saved.hintsUsed || {};
     } else {
       clearState();
+      state.timeLeftMs = CONFIG.COUNTDOWN_MINUTES * 60 * 1000;
+      state.current = 0;
+      state.solved = {};
+      state.hintsUsed = {};
     }
 
     buildRooms();
@@ -482,7 +529,9 @@
   }
 
   function start() {
-    loadQuestions().then(startGame);
+    loadQuestions().then(function () {
+      startGame();
+    });
   }
 
   if (document.readyState === "loading") {
