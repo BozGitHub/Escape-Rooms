@@ -152,24 +152,26 @@
   // TIMER
   //--------------------------------------------------
   function injectTimerCard() {
-    var card = document.createElement("div");
-    card.id = "timer-card";
-    card.className = "card";
-    card.style.position = "fixed";
-    card.style.top = "230px";
-    card.style.left = "50%";
-    card.style.transform = "translateX(-50%)";
-    card.style.zIndex = "80";
-    card.style.maxWidth = "260px";
-    card.style.textAlign = "center";
+  var card = document.createElement("div");
+  card.id = "timer-card";
+  card.className = "card";
 
-    card.innerHTML =
-      "<div style='font-size:0.8rem;color:#9da7b1;'>Time left</div>" +
-      "<div class='tval' style='font-size:1.8rem;font-weight:700;'>--:--</div>" +
-      "<div style='font-size:0.75rem;margin-top:.25rem;color:#eab308;'>Hints deduct 1 minute</div>";
+  // Better placement (below header, above padlocks)
+  card.style.position = "relative";
+  card.style.margin = "1.5rem auto 0 auto"; 
+  card.style.maxWidth = "260px";
+  card.style.textAlign = "center";
+  card.style.padding = "0.6rem 1.2rem";
 
-    document.body.appendChild(card);
-  }
+  card.innerHTML =
+    "<div style='font-size:0.8rem;color:#9da7b1;'>Time left</div>" +
+    "<div class='tval' style='font-size:1.8rem;font-weight:700;'>--:--</div>" +
+    "<div style='font-size:0.75rem;margin-top:.25rem;color:#eab308;'>Hints deduct 1 minute</div>";
+
+  // Insert BELOW <header> but ABOVE progress locks
+  var header = document.querySelector("header");
+  header.insertAdjacentElement("afterend", card);
+}
 
   function updateTimerDisplay() {
     var tEl = document.querySelector("#timer-card .tval");
