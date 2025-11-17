@@ -130,25 +130,6 @@
       .catch(() => { ROOMS = []; });
   }
 
-  /* Top clock */
-  function injectTimerCard() {
-    var card = document.createElement("div");
-    card.id = "timer-card";
-    card.className = "card";
-    card.style.position = "fixed";
-    card.style.top = "20px";
-    card.style.left = "50%";
-    card.style.transform = "translateX(-50%)";
-    card.style.zIndex = "50";
-    card.style.maxWidth = "260px";
-    card.style.textAlign = "center";
-    card.innerHTML =
-      "<div style='font-size:0.8rem;color:#9da7b1;'>Time left</div>" +
-      "<div class='tval' style='font-size:1.8rem;font-weight:700;'>--:--</div>" +
-      "<div style='margin-top:4px;font-size:.75rem;color:#aaa;'>Hint costs time</div>";
-    document.body.appendChild(card);
-  }
-
   function updateTimerDisplay() {
     var el = document.querySelector("#timer-card .tval");
     if (!el) return;
