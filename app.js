@@ -1,4 +1,4 @@
-// app.js — dynamic questions, timer, inline timer, auto‑advance, green flash, no Next button, intro only on Level 1
+// app.js — dynamic questions, timer, inline timer, auto-advance, green flash, no Next button, intro only on Level 1
 (function () {
   var CONFIG = {
     COUNTDOWN_MINUTES: 25,
@@ -130,11 +130,16 @@
       .catch(() => { ROOMS = []; });
   }
 
+  /* Top clock - REMOVED by disabling its injection */
+  function injectTimerCard() {
+    // DISABLED – white top timer removed
+    return;
+  }
+
   function updateTimerDisplay() {
-    var el = document.querySelector("#timer-card .tval");
-    if (!el) return;
-    el.textContent = formatSeconds(Math.floor(state.timeLeftMs / 1000));
-    document.querySelectorAll('.inline-tval').forEach(function(t){ t.textContent = el.textContent; });
+    document.querySelectorAll('.inline-tval').forEach(function (t) {
+      t.textContent = formatSeconds(Math.floor(state.timeLeftMs / 1000));
+    });
   }
 
   function startTimer() {
@@ -298,7 +303,9 @@
   }
 
   function startGame() {
-    injectTimerCard();
+
+    // ⛔ WHITE CLOCK REMOVED — do not inject it
+    // injectTimerCard();
 
     var prog = document.createElement('div');
     prog.id = 'progress';
