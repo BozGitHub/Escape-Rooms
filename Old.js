@@ -1,132 +1,392 @@
-// old.js — ES5 + server verify + robust rendering (external file)
-(function(){
-  function start(){
-    var roomsEl = document.getElementById('rooms');
-    if(!roomsEl){
-      console.error('rooms container not found');
-      return;
-    }
+// app.js — dynamic questions, timer, hints (time penalty), disappearing locks, anti-F5
+(function () {
+  // ---------------- CONFIG ----------------
+  var CONFIG = {
+    COUNTDOWN_MINUTES: 25,
+    STATE_KEY: "escape_state_v1",
+    SESSION_MAX_AGE_MS: 60 * 60 * 1000,
+    // change this number to adjust hint penalty:
+    // 60000 = 1 min, 300000 = 5 min, etc.
+    HINT_PENALTY_MS: 60000
+  };
 
-    function toStr(x){ return String(x==null?'':x); }
-    function nl2br(s){ return toStr(s).split('\n').join('<br>'); }
-    function showFatal(msg){
-      try{
-        var card=document.createElement('div');
-        card.className='card';
-        card.style.borderColor='#ef4444';
-        card.innerHTML='<strong>Error:</strong> '+toStr(msg);
-        roomsEl.parentNode.insertBefore(card, roomsEl);
-      }catch(e){}
-    }
+  // ---------------- STATE ----------------
+  var state = {
+    timeLeftMs: CONFIG.COUNTDOWN_MINUTES * 60000,
+    timerId: null,
+    current: 0,
+    solved: {},
+    hintsUsed: {},
+    lastUpdated: Date.now()
+  };
 
-    // Server verify (Promise-based)
-    function verify(levelIndex, answer){
-      return new Promise(function(resolve){
-        try{
-          var payload=JSON.stringify({ level: levelIndex, answer: answer });
-          fetch('/api/check', {
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body: payload
-          })
-          .then(function(r){ if(!r||!r.ok){ return resolve(false); } return r.json(); })
-          .then(function(data){ resolve(!!(data&&data.ok)); }, function(){ resolve(false); });
-        }catch(e){ resolve(false); }
-      });
-    }
+  var ROOMS = [];
 
-    // Levels (content only)
-    var ROOMS = [
-      { title:'Level 1 - VR Suite (Top Floor)',
-        prompt:'Reality bends upstairs. Find the VR Suite on the top floor. Enter the room number',
-         },
-      { title:'Level 2 - Fire Laboratory',
-        prompt:'Descend one floor. Where heat meets safety, flames are studied not feared. Enter the room number or a label you find in the Fire Lab.',
-        hint:'Look for controlled combustion equipment.' },
-      { title:'Level 3 - 3D Printing Workshop',
-        prompt:'Descend again. Where ideas become matter one layer at a time. Enter a printer model code or the room label you find (for example, MK3S or Prusa).',
-        hint:'Check the machine tag.' },
-      { title:'Level 4 - Motorsport and Composites Lab',
-        prompt:'Go down two floors (skip one). Engines sleep and carbon weaves dream of speed. Enter the team name, a room label, or a code you find near the car.',
-        hint:'Look near the steering wheel or composite layup.' },
-      { title:'Level 5 - Simulation Lab (Lower Ground)',
-        prompt:'Descend to the lower ground. What flies safely is rehearsed here first. Enter the room number or a keyword you find there (for example, Simulation or Sim Lab).',
-        hint:'Check the door plaque or console.' },
-      { title:'Level 6 - CNC Workshop Finale',
-        prompt:'Final step. Creation obeys a number. From previous clues, determine the CNC program number (for example, 5 for a 5 axis hint). Enter that number now.',
-        hint:'Think: axis count to program number.' }
-    ];
+  // ---------------- HELPERS ----------------
+  function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
+  function toStr(x) { return String(x == null ? "" : x); }
 
-    function makeRoom(i, room){
-      var div=document.createElement('div');
-      div.className='card room'+(i===0?' active':'');
-      div.setAttribute('data-index', String(i));
-      div.innerHTML='' +
-        '<h2 style="margin:0 0 .5rem 0">'+room.title+'</h2>' +
-        '<div class="q">'+nl2br(room.prompt)+'</div>' +
-        '<div class="controls">' +
-          '<input type="text" placeholder="Type your answer..." aria-label="answer input">' +
-          '<button class="submit">Submit</button>' +
-          '<button class="next" disabled>Next Room -></button>' +
-        '</div>' +
-        '<div class="feedback" aria-live="polite"></div>' +
-        '<div class="hint">Hint: '+(room.hint||'')+'</div>';
-
-      var input=div.querySelector('input');
-      var submit=div.querySelector('.submit');
-      var next=div.querySelector('.next');
-      var fb=div.querySelector('.feedback');
-
-      submit.addEventListener('click', function(){
-        var val=input.value;
-        submit.disabled=true; fb.textContent='Checking...'; fb.className='feedback';
-        verify(i, val).then(function(ok){
-          submit.disabled=false;
-          if(ok){ fb.textContent='Correct!'; fb.className='feedback ok'; next.disabled=false; next.focus(); }
-          else { fb.textContent='Not yet - try again!'; fb.className='feedback err'; }
-        });
-      });
-
-      next.addEventListener('click', function(){
-        var idx=parseInt(div.getAttribute('data-index'),10);
-        div.classList.remove('active');
-        if(idx+1<ROOMS.length){
-          var nxt=document.querySelector('.room[data-index="'+(idx+1)+'"]');
-          if(!nxt){ showFatal('Could not find next room'); return; }
-          nxt.classList.add('active');
-          var f=nxt.querySelector('input'); if(f) f.focus();
-        } else { celebrate(); }
-      });
-
-      return div;
-    }
-
-    function build(){
-      try{
-        roomsEl.innerHTML='';
-        for(var i=0;i<ROOMS.length;i++){ roomsEl.appendChild(makeRoom(i, ROOMS[i])); }
-        var first=document.querySelector('.room[data-index="0"]');
-        if(!first){ showFatal('Rooms failed to render'); }
-      }catch(e){ showFatal(e && e.message ? e.message : 'render error'); }
-    }
-
-    function celebrate(){
-      var canvas=document.querySelector('.confetti');
-      if(!canvas) return;
-      var ctx=canvas.getContext('2d');
-      function resize(){ canvas.width=innerWidth; canvas.height=innerHeight; }
-      resize(); addEventListener('resize',resize);
-      var parts=[]; for(var i=0;i<200;i++){ parts.push({x:Math.random()*canvas.width,y:-10-Math.random()*canvas.height,r:2+Math.random()*4,vy:2+Math.random()*3,vx:(Math.random()-0.5)*1.5}); }
-      var msg=document.createElement('div'); msg.className='card'; msg.style.position='fixed'; msg.style.left='50%'; msg.style.top='10%'; msg.style.transform='translateX(-50%)'; msg.style.zIndex='10'; msg.innerHTML='<h2>You escaped!</h2><p>Proceed to the CNC workshop and run your program.</p>'; document.body.appendChild(msg);
-      var t=0; (function loop(){ ctx.clearRect(0,0,canvas.width,canvas.height); for(var j=0;j<parts.length;j++){ var p=parts[j]; p.x+=p.vx; p.y+=p.vy; p.vy+=0.02; if(p.y>canvas.height+10){ p.y=-10; p.x=Math.random()*canvas.width; p.vy=2+Math.random()*3; } ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill(); } if(t++<1000) requestAnimationFrame(loop); })();
-    }
-
-    build();
+  function formatSeconds(s) {
+    var m = Math.floor(s / 60);
+    var sec = s % 60;
+    return (m < 10 ? "0" + m : m) + ":" + (sec < 10 ? "0" + sec : sec);
   }
 
-  if(document.readyState==='loading'){
+  function flashIncorrect() {
+    var overlay = document.createElement("div");
+    overlay.style.position = "fixed";
+    overlay.style.inset = "0";
+    overlay.style.background = "rgba(255,0,0,0.45)";
+    overlay.style.display = "flex";
+    overlay.style.alignItems = "center";
+    overlay.style.justifyContent = "center";
+    overlay.style.zIndex = "20000";
+    overlay.style.fontSize = "2rem";
+    overlay.style.fontWeight = "800";
+    overlay.style.color = "#fff";
+    overlay.style.textShadow = "0 0 10px #000";
+    overlay.textContent = "Incorrect Answer";
+
+    document.body.appendChild(overlay);
+    setTimeout(function () {
+      overlay.style.transition = "opacity .3s";
+      overlay.style.opacity = "0";
+      setTimeout(function () {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      }, 300);
+    }, 600);
+  }
+
+  function showOverlay(title, bodyHtml) {
+    var cover = document.createElement("div");
+    cover.style.position = "fixed";
+    cover.style.inset = "0";
+    cover.style.background = "rgba(0,0,0,.75)";
+    cover.style.backdropFilter = "blur(2px)";
+    cover.style.display = "flex";
+    cover.style.alignItems = "center";
+    cover.style.justifyContent = "center";
+    cover.style.zIndex = "9999";
+
+    var box = document.createElement("div");
+    box.className = "card";
+    box.style.maxWidth = "720px";
+    box.style.textAlign = "center";
+    box.innerHTML =
+      "<h2 style='margin-top:0'>" + toStr(title) + "</h2>" +
+      "<div class='q' style='margin-top:.5rem'>" + bodyHtml + "</div>";
+
+    cover.appendChild(box);
+    document.body.appendChild(cover);
+  }
+
+  function disableAll() {
+    var els = document.querySelectorAll("input,button");
+    for (var i = 0; i < els.length; i++) els[i].disabled = true;
+  }
+
+  // ---------------- SAVE / LOAD STATE ----------------
+  function saveState() {
+    try {
+      state.lastUpdated = Date.now();
+      localStorage.setItem(CONFIG.STATE_KEY, JSON.stringify(state));
+    } catch (e) {}
+  }
+
+  function loadState() {
+    try {
+      var raw = localStorage.getItem(CONFIG.STATE_KEY);
+      if (!raw) return null;
+      var data = JSON.parse(raw);
+      if (!data || typeof data.timeLeftMs !== "number") return null;
+      var age = Date.now() - (data.lastUpdated || 0);
+      if (age > CONFIG.SESSION_MAX_AGE_MS) {
+        localStorage.removeItem(CONFIG.STATE_KEY);
+        return null;
+      }
+      return data;
+    } catch (e) { return null; }
+  }
+
+  function clearState() {
+    try { localStorage.removeItem(CONFIG.STATE_KEY); } catch (e) {}
+  }
+
+  // ---------------- QUESTIONS ----------------
+  function loadQuestions() {
+    return fetch("/questions.json")
+      .then(function (res) { return res.json(); })
+      .then(function (data) { ROOMS = data || []; })
+      .catch(function () { ROOMS = []; });
+  }
+
+  // ---------------- TIMER (INLINE ONLY) ----------------
+  function updateTimerDisplay() {
+    var seconds = Math.floor(state.timeLeftMs / 1000);
+    var text = formatSeconds(seconds);
+
+    // update all inline timers
+    var spans = document.querySelectorAll(".inline-tval");
+    for (var i = 0; i < spans.length; i++) {
+      spans[i].textContent = text;
+    }
+  }
+
+  function startTimer() {
+    stopTimer();
+    function tick() {
+      state.timeLeftMs = clamp(
+        state.timeLeftMs - 1000,
+        0,
+        CONFIG.COUNTDOWN_MINUTES * 60000
+      );
+      updateTimerDisplay();
+      saveState();
+      if (state.timeLeftMs <= 0) {
+        stopTimer();
+        failMission();
+      }
+    }
+    state.timerId = setInterval(tick, 1000);
+    updateTimerDisplay();
+  }
+
+  function stopTimer() {
+    if (state.timerId) clearInterval(state.timerId);
+    state.timerId = null;
+  }
+
+  function applyHintPenalty() {
+    state.timeLeftMs = clamp(
+      state.timeLeftMs - CONFIG.HINT_PENALTY_MS,
+      0,
+      CONFIG.COUNTDOWN_MINUTES * 60000
+    );
+    updateTimerDisplay();
+    saveState();
+  }
+
+  // ---------------- VERIFY ANSWERS ----------------
+  function verify(levelIndex, answer) {
+    return fetch("/api/check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ level: levelIndex, answer: answer })
+    })
+      .then(function (r) { return r.ok ? r.json() : { ok: false }; })
+      .then(function (d) { return !!(d && d.ok); })
+      .catch(function () { return false; });
+  }
+
+  // ---------------- PROGRESS / LOCKS ----------------
+  function updateProgress() {
+    var total = ROOMS.length;
+    var locksEl = document.querySelector("#progress .locks");
+    var textEl = document.querySelector("#progress .ptext");
+
+    var locked = "";
+    var solvedCount = 0;
+
+    for (var i = 0; i < total; i++) {
+      if (state.solved[i]) solvedCount++;
+      else locked += "🔒";
+    }
+
+    if (locksEl) locksEl.textContent = locked;
+    if (textEl) textEl.textContent =
+      "Level " + (state.current + 1) + " of " + total +
+      "  (" + solvedCount + "/" + total + " unlocked)";
+  }
+
+  // ---------------- ENDINGS ----------------
+  function failMission() {
+    disableAll();
+    clearState();
+    showOverlay("Mission failed", "You ran out of time.");
+  }
+
+  function celebrate() {
+    stopTimer();
+    disableAll();
+    clearState();
+    showOverlay("Escaped!", "You restored power and escaped!");
+  }
+
+  // ---------------- BUILD ROOM UI ----------------
+  function makeRoom(i, room) {
+    var div = document.createElement("div");
+    div.className = "card room" + (i === state.current ? " active" : "");
+    div.setAttribute("data-index", i);
+
+    var penaltyMinutes = CONFIG.HINT_PENALTY_MS / 60000;
+
+    div.innerHTML =
+      "<h2 style='margin:0 0 .5rem 0'>" + room.title + "</h2>" +
+      "<div class='q intro' style='margin-bottom:.4rem;'></div>" +
+      "<div class='q prompt' style='white-space:pre-line;'></div>" +
+
+      "<div class='inline-timer' " +
+        "style='margin:0.6rem 0;font-size:1.4rem;font-weight:700;text-align:center;color:#ffd700;'>" +
+        "⏱ <span class='inline-tval'>--:--</span>" +
+      "</div>" +
+
+      "<div class='controls' style='margin-top:.6rem;'>" +
+        "<input type='text' placeholder='Type your answer...' aria-label='answer input'>" +
+        "<button class='submit'>Submit</button>" +
+        "<button class='hint-btn'>Show Hint (-" + penaltyMinutes + ":00)</button>" +
+        "<button class='next' disabled>Next Room →</button>" +
+      "</div>" +
+
+      "<div class='hint-text' style='margin-top:.4rem; display:none; color:#9da7b1;'></div>" +
+      "<div class='feedback' style='margin-top:.3rem;'></div>";
+
+    var introEl = div.querySelector('.intro');
+    var promptEl = div.querySelector('.prompt');
+    var hintEl = div.querySelector('.hint-text');
+    var submit = div.querySelector('.submit');
+    var next = div.querySelector('.next');
+    var hintBtn = div.querySelector('.hint-btn');
+    var feedback = div.querySelector('.feedback');
+    var input = div.querySelector('input');
+
+    // Intro only on level 0
+    if (i === 0) {
+      introEl.textContent = room.intro || "";
+    } else {
+      introEl.textContent = "";
+      introEl.style.display = "none";
+    }
+
+    promptEl.textContent = room.prompt || "";
+    hintEl.textContent = "Hint: " + (room.hint || "");
+
+    // Restore hint used
+    if (state.hintsUsed[i]) {
+      hintEl.style.display = 'block';
+      hintBtn.textContent = "Hint used (-" + penaltyMinutes + ":00)";
+      hintBtn.disabled = true;
+    }
+
+    // Restore solved
+    if (state.solved[i]) {
+      feedback.textContent = 'Correct!';
+      next.disabled = false;
+    }
+
+    // Submit handler
+    submit.addEventListener('click', function () {
+      var val = input.value;
+      submit.disabled = true;
+      feedback.textContent = 'Checking...';
+
+      verify(i, val).then(function (ok) {
+        submit.disabled = false;
+        if (ok) {
+          state.solved[i] = true;
+          feedback.textContent = 'Correct!';
+          next.disabled = false;
+          updateProgress();
+          saveState();
+        } else {
+          flashIncorrect();
+        }
+      });
+    });
+
+    // Hint handler
+    hintBtn.addEventListener('click', function () {
+      if (state.hintsUsed[i]) return;
+      state.hintsUsed[i] = true;
+      hintEl.style.display = 'block';
+      hintBtn.textContent = "Hint used (-" + penaltyMinutes + ":00)";
+      hintBtn.disabled = true;
+      applyHintPenalty();
+      saveState();
+    });
+
+    // Next handler
+    next.addEventListener('click', function () {
+      var idx = parseInt(div.getAttribute('data-index'), 10);
+      div.classList.remove('active');
+
+      if (idx + 1 < ROOMS.length) {
+        state.current = idx + 1;
+        var nxt = document.querySelector('.room[data-index="' + (idx + 1) + '"]');
+        if (nxt) nxt.classList.add('active');
+        updateProgress();
+        saveState();
+      } else {
+        celebrate();
+      }
+    });
+
+    return div;
+  }
+
+  function buildRooms() {
+    var roomsEl = document.getElementById('rooms');
+    roomsEl.innerHTML = '';
+    for (var i = 0; i < ROOMS.length; i++) {
+      roomsEl.appendChild(makeRoom(i, ROOMS[i]));
+    }
+    // make sure inline timers show the current time on first render
+    updateTimerDisplay();
+  }
+
+  // ---------------- GAME START ----------------
+  function startGame() {
+    // Load previous state (for anti-F5)
+    var saved = loadState();
+    if (saved && ROOMS.length) {
+      state.timeLeftMs = saved.timeLeftMs;
+      state.current = saved.current || 0;
+      state.solved = saved.solved || {};
+      state.hintsUsed = saved.hintsUsed || {};
+    } else {
+      clearState();
+      state.timeLeftMs = CONFIG.COUNTDOWN_MINUTES * 60000;
+      state.current = 0;
+      state.solved = {};
+      state.hintsUsed = {};
+    }
+
+    // Hide the story card at top after level 1
+    var storyCard = document.querySelector('.card.story');
+    if (storyCard) {
+      if (state.current > 0 || Object.keys(state.solved).length > 0) {
+        storyCard.style.display = 'none';
+      }
+    }
+
+    // Insert progress card above rooms
+    var prog = document.createElement('div');
+    prog.id = 'progress';
+    prog.className = 'card';
+    prog.style.marginTop = '4rem';
+    prog.innerHTML =
+      "<div class='ptext'></div>" +
+      "<div class='locks' style='font-size:1.4rem;margin-top:.3rem;'></div>";
+
+    var wrap = document.querySelector('.wrap');
+    var roomsEl = document.getElementById('rooms');
+    wrap.insertBefore(prog, roomsEl);
+
+    buildRooms();
+    updateProgress();
+    startTimer();
+  }
+
+  // ---------------- INIT ----------------
+  function start() {
+    loadQuestions().then(function () {
+      startGame();
+    });
+  }
+
+  if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', start);
   } else {
     start();
   }
+
 })();
