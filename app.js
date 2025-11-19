@@ -1,4 +1,4 @@
-// app.js — dynamic questions, timer, inline timer, auto-advance, green flash, no Next button, intro only on Level 1
+// app.jsk — dynamic questions, timer, inline timer, auto-advance, green flash, no Next button, intro only on Level 1
 (function () {
   var CONFIG = {
     COUNTDOWN_MINUTES: 25,
