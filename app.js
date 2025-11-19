@@ -233,7 +233,7 @@
     if (i === 0) introEl.textContent = room.intro || "";
     else { introEl.textContent = ""; introEl.style.display = "none"; }
 
-    promptEl.textContent = room.prompt || "";
+    promptEl.innerHTML = room.prompt || "";
     hintEl.textContent = "Hint: " + (room.hint || "");
 
     if (state.hintsUsed[i]) {
