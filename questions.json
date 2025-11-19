@@ -1,9 +1,11 @@
 [
   {
-    "title": "Lift Level 4 - VR Suite",
-    "intro": "Reality bends upstairs. Diagnostic beacons pulse along the corridor.",
-    "prompt": "Find the VR Suite on the top floor. Enter the room number or keyword.",
-    "hint": "Try the room code on the door."
+    {
+  "title": "Find the number in the picture",
+  "intro": "",
+  "prompt": "<img src='images/puzzle1.jpg' style='max-width:100%;border-radius:10px;'><br>What number do you see?",
+  "hint": "Look closely at the symbols."
+}
   },
   {
     "title": "Lift Level 3 - Fire Laboratory",
