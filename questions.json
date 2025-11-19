@@ -1,11 +1,9 @@
 [
   {
-    {
-  "title": "Find the number in the picture",
-  "intro": "",
-  "prompt": "<img src='images/puzzle1.jpg' style='max-width:100%;border-radius:10px;'><br>What number do you see?",
-  "hint": "Look closely at the symbols."
-}
+    "title": "Find the number in the picture",
+    "intro": "",
+    "prompt": "<img src='images/puzzle1.jpg' style='max-width:100%;border-radius:10px;'><br>What number do you see?",
+    "hint": "Look closely at the symbols."
   },
   {
     "title": "Lift Level 3 - Fire Laboratory",
@@ -20,13 +18,13 @@
     "hint": "Check the machine tag."
   },
   {
-    "title": "Lift Level 0 ",
+    "title": "Lift Level 0",
     "intro": "A chassis sleeps on stands. Carbon sheets shimmer.",
     "prompt": "Enter the team name or a code near the car.",
     "hint": "Look near the steering wheel."
   },
   {
-    "title": "Lift Level -1 ",
+    "title": "Lift Level -1",
     "intro": "Panels glow. A digital horizon rolls across the screens.",
     "prompt": "Enter the sim lab door number or a console keyword.",
     "hint": "Check the door plaque."
