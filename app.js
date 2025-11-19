@@ -1,4 +1,4 @@
-// app.js — dynamic questions, timer, inline timer, auto-advance, flashes, no Next button, intro only on Level 1
+// app.js — dynamic questions, timer, inline timer, auto-advance, green flash, no Next button, intro only on Level 1
 (function () {
   var CONFIG = {
     COUNTDOWN_MINUTES: 25,
@@ -13,34 +13,13 @@
     current: 0,
     solved: {},
     hintsUsed: {},
-    lastUpdated: Date.now(),
-    playerName: null
+    lastUpdated: Date.now()
   };
 
   var ROOMS = [];
 
   function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
   function toStr(x) { return String(x == null ? "" : x); }
-
-  // ============================
-  //   PLAYER NAME PROMPT (NEW)
-  // ============================
-  function askPlayerName() {
-    return new Promise(resolve => {
-      const overlay = showOverlay(
-        "Enter your name",
-        "<input id='playerNameInput' type='text' placeholder='Your name...' style='padding:.5rem;font-size:1.2rem;width:80%;max-width:300px;'>\
-         <br><button id='playerNameBtn' style='margin-top:1rem;'>Start</button>"
-      );
-
-      document.getElementById("playerNameBtn").onclick = () => {
-        const name = document.getElementById("playerNameInput").value.trim();
-        if (!name) return;
-        overlay.cover.remove();
-        resolve(name);
-      };
-    });
-  }
 
   /* Red flash for incorrect */
   function flashIncorrect() {
@@ -151,7 +130,11 @@
       .catch(() => { ROOMS = []; });
   }
 
-  function injectTimerCard() { return; }
+  /* Top clock - REMOVED by disabling its injection */
+  function injectTimerCard() {
+    // DISABLED – white top timer removed
+    return;
+  }
 
   function updateTimerDisplay() {
     document.querySelectorAll('.inline-tval').forEach(function (t) {
@@ -212,31 +195,14 @@
     showOverlay("Mission failed", "You ran out of time.");
   }
 
-  // ====================================
-  //   CELEBRATE() — NOW LOGS SCORE
-  // ====================================
   function celebrate() {
     stopTimer();
     disableAll();
-
-    const totalMs = CONFIG.COUNTDOWN_MINUTES * 60000;
-    const timeTakenMs = totalMs - state.timeLeftMs;
-
-    // NEW: silently send score to server
-    fetch("/api/leaderboard", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: state.playerName || "Unknown",
-        timeMs: timeTakenMs,
-        timestamp: Date.now()
-      })
-    }).catch(() => {});
-
     clearState();
     showOverlay("Escaped!", "You restored power and escaped!");
   }
 
+  /* BUILD EACH ROOM */
   function makeRoom(i, room) {
     var div = document.createElement("div");
     div.className = "card room" + (i === state.current ? " active" : "");
@@ -263,6 +229,7 @@
     var feedback = div.querySelector('.feedback');
     var input = div.querySelector('input');
 
+    // INTRO ONLY ON LEVEL 0
     if (i === 0) introEl.textContent = room.intro || "";
     else { introEl.textContent = ""; introEl.style.display = "none"; }
 
@@ -275,6 +242,7 @@
       hintBtn.disabled = true;
     }
 
+    /* SUBMIT HANDLER */
     submit.addEventListener('click', function () {
       var val = input.value;
       submit.disabled = true;
@@ -294,6 +262,7 @@
             if (storyCard) storyCard.style.display = 'none';
           }
 
+          // AUTO ADVANCE
           setTimeout(function () {
             var idx = i;
             div.classList.remove('active');
@@ -334,6 +303,10 @@
   }
 
   function startGame() {
+
+    // ⛔ WHITE CLOCK REMOVED — do not inject it
+    // injectTimerCard();
+
     var prog = document.createElement('div');
     prog.id = 'progress';
     prog.className = 'card';
@@ -369,14 +342,8 @@
     return (m < 10 ? '0' + m : m) + ':' + (sec < 10 ? '0' + sec : sec);
   }
 
-  // =====================================
-  //        START — NOW ASKS NAME
-  // =====================================
   function start() {
-    askPlayerName().then(name => {
-      state.playerName = name;
-      loadQuestions().then(() => startGame());
-    });
+    loadQuestions().then(() => startGame());
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
